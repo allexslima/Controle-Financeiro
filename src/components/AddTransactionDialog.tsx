@@ -13,9 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, CreditCard, Wallet, ArrowUpCircle } from "lucide-react";
+import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
-import { showSuccess } from "@/utils/toast";
+import { showSuccess, showError } from "@/utils/toast";
 
 interface AddTransactionDialogProps {
   banks: Bank[];
@@ -28,27 +28,40 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<TransactionMethod>("debit");
   const [bankId, setBankId] = useState("");
+  const [destinationBankId, setDestinationBankId] = useState("");
   const [category, setCategory] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!description || !amount || !bankId) return;
+    if (method === 'transfer' && (!destinationBankId || bankId === destinationBankId)) {
+      showError("Selecione uma conta de destino diferente da origem.");
+      return;
+    }
 
     const newTransaction: Transaction = {
       id: Math.random().toString(36).substr(2, 9),
-      description,
+      description: method === 'transfer' ? `Transferência: ${description}` : description,
       amount: parseFloat(amount),
       method,
       bankId,
-      category: category || "Geral",
+      destinationBankId: method === 'transfer' ? destinationBankId : undefined,
+      category: category || (method === 'transfer' ? "Transferência" : "Geral"),
       date: new Date().toISOString(),
     };
 
     onAdd(newTransaction);
-    showSuccess(`Transação registrada com sucesso!`);
+    showSuccess(`Operação registrada com sucesso!`);
+    resetForm();
+    setOpen(false);
+  };
+
+  const resetForm = () => {
     setDescription("");
     setAmount("");
-    setOpen(false);
+    setBankId("");
+    setDestinationBankId("");
+    setCategory("");
   };
 
   return (
@@ -59,46 +72,36 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
           Nova Transação
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] rounded-2xl">
+      <DialogContent className="sm:max-w-[450px] rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Nova Transação</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">Nova Movimentação</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-xl">
-            <Button
-              type="button"
-              variant={method === 'income' ? 'default' : 'ghost'}
-              className={`rounded-lg flex-col py-8 h-auto gap-1 ${method === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
-              onClick={() => setMethod('income')}
-            >
-              <ArrowUpCircle className="h-5 w-5" />
-              <span className="text-[10px]">Receita</span>
-            </Button>
-            <Button
-              type="button"
-              variant={method === 'debit' ? 'default' : 'ghost'}
-              className={`rounded-lg flex-col py-8 h-auto gap-1 ${method === 'debit' ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
-              onClick={() => setMethod('debit')}
-            >
-              <Wallet className="h-5 w-5" />
-              <span className="text-[10px]">Débito</span>
-            </Button>
-            <Button
-              type="button"
-              variant={method === 'credit' ? 'default' : 'ghost'}
-              className={`rounded-lg flex-col py-8 h-auto gap-1 ${method === 'credit' ? 'bg-purple-600 hover:bg-purple-700' : ''}`}
-              onClick={() => setMethod('credit')}
-            >
-              <CreditCard className="h-5 w-5" />
-              <span className="text-[10px]">Crédito</span>
-            </Button>
+          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl">
+            {[
+              { id: 'income', label: 'Receita', icon: ArrowUpCircle, color: 'bg-emerald-600' },
+              { id: 'debit', label: 'Débito', icon: Wallet, color: 'bg-blue-600' },
+              { id: 'credit', label: 'Crédito', icon: CreditCard, color: 'bg-purple-600' },
+              { id: 'transfer', label: 'Transf.', icon: ArrowLeftRight, color: 'bg-orange-500' },
+            ].map((item) => (
+              <Button
+                key={item.id}
+                type="button"
+                variant={method === item.id ? 'default' : 'ghost'}
+                className={`rounded-lg flex-col py-6 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
+                onClick={() => setMethod(item.id as TransactionMethod)}
+              >
+                <item.icon className="h-4 w-4" />
+                <span className="text-[9px]">{item.label}</span>
+              </Button>
+            ))}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="description">Descrição</Label>
             <Input
               id="description"
-              placeholder="Ex: Aluguel, Salário, Mercado..."
+              placeholder="Ex: Aluguel, Pix, Transferência..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="rounded-xl"
@@ -120,35 +123,57 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Conta Bancária</Label>
-            <Select onValueChange={setBankId} required>
-              <SelectTrigger className="rounded-xl">
-                <SelectValue placeholder="Selecione a conta" />
-              </SelectTrigger>
-              <SelectContent>
-                {banks.map((bank) => (
-                  <SelectItem key={bank.id} value={bank.id}>
-                    {bank.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-2">
+              <Label>{method === 'transfer' ? 'Conta de Origem' : 'Conta Bancária'}</Label>
+              <Select onValueChange={setBankId} value={bankId} required>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Selecione a conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {banks.map((bank) => (
+                    <SelectItem key={bank.id} value={bank.id}>
+                      {bank.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {method === 'transfer' && (
+              <div className="space-y-2">
+                <Label>Conta de Destino</Label>
+                <Select onValueChange={setDestinationBankId} value={destinationBankId} required>
+                  <SelectTrigger className="rounded-xl border-orange-200 bg-orange-50/30">
+                    <SelectValue placeholder="Selecione o destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {banks.map((bank) => (
+                      <SelectItem key={bank.id} value={bank.id} disabled={bank.id === bankId}>
+                        {bank.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="category">Categoria</Label>
-            <Input
-              id="category"
-              placeholder="Ex: Alimentação, Lazer..."
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
+          {method !== 'transfer' && (
+            <div className="space-y-2">
+              <Label htmlFor="category">Categoria</Label>
+              <Input
+                id="category"
+                placeholder="Ex: Alimentação, Lazer..."
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="rounded-xl"
+              />
+            </div>
+          )}
 
           <DialogFooter className="pt-4">
-            <Button type="submit" className="w-full rounded-xl py-6 text-lg">Registrar</Button>
+            <Button type="submit" className="w-full rounded-xl py-6 text-lg">Confirmar</Button>
           </DialogFooter>
         </form>
       </DialogContent>

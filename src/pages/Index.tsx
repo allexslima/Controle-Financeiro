@@ -24,20 +24,30 @@ const Index = () => {
 
   const removeBank = (id: string) => {
     setBanks(banks.filter(bank => bank.id !== id));
-    setTransactions(transactions.filter(t => t.bankId !== id));
+    setTransactions(transactions.filter(t => t.bankId !== id && t.destinationBankId !== id));
   };
 
   const addTransaction = (transaction: Transaction) => {
     setTransactions([transaction, ...transactions]);
     
     setBanks(prevBanks => prevBanks.map(bank => {
+      // Lógica para conta de origem (ou conta única)
       if (bank.id === transaction.bankId) {
-        // Receita soma, Débito e Crédito subtraem do saldo
-        const newBalance = transaction.method === 'income' 
-          ? bank.balance + transaction.amount 
-          : bank.balance - transaction.amount;
+        let newBalance = bank.balance;
+        if (transaction.method === 'income') {
+          newBalance += transaction.amount;
+        } else {
+          // Débito, Crédito ou Transferência (saída da origem)
+          newBalance -= transaction.amount;
+        }
         return { ...bank, balance: newBalance };
       }
+      
+      // Lógica para conta de destino (apenas em transferências)
+      if (transaction.method === 'transfer' && bank.id === transaction.destinationBankId) {
+        return { ...bank, balance: bank.balance + transaction.amount };
+      }
+      
       return bank;
     }));
   };
@@ -52,7 +62,7 @@ const Index = () => {
 
   const monthlyExpenses = useMemo(() => 
     transactions
-      .filter(t => t.method !== 'income')
+      .filter(t => t.method === 'debit' || t.method === 'credit')
       .reduce((acc, t) => acc + t.amount, 0), 
   [transactions]);
 

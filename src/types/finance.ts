@@ -5,7 +5,7 @@ export interface Bank {
   color: string;
 }
 
-export type TransactionMethod = 'debit' | 'credit' | 'income';
+export type TransactionMethod = 'debit' | 'credit' | 'income' | 'transfer';
 
 export interface Transaction {
   id: string;
@@ -15,4 +15,5 @@ export interface Transaction {
   category: string;
   date: string;
   bankId: string;
+  destinationBankId?: string; // Usado apenas em transferências
 }

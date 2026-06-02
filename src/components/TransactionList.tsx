@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Transaction, Bank } from "@/types/finance";
-import { ArrowUpCircle, Wallet, CreditCard, Calendar } from "lucide-react";
+import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -19,6 +19,7 @@ const TransactionList = ({ transactions, banks }: TransactionListProps) => {
       case 'income': return <ArrowUpCircle size={24} className="text-emerald-600" />;
       case 'debit': return <Wallet size={24} className="text-blue-600" />;
       case 'credit': return <CreditCard size={24} className="text-purple-600" />;
+      case 'transfer': return <ArrowLeftRight size={24} className="text-orange-500" />;
       default: return <Wallet size={24} />;
     }
   };
@@ -28,6 +29,7 @@ const TransactionList = ({ transactions, banks }: TransactionListProps) => {
       case 'income': return 'bg-emerald-100';
       case 'debit': return 'bg-blue-100';
       case 'credit': return 'bg-purple-100';
+      case 'transfer': return 'bg-orange-100';
       default: return 'bg-slate-100';
     }
   };
@@ -52,15 +54,28 @@ const TransactionList = ({ transactions, banks }: TransactionListProps) => {
                 <div>
                   <p className="font-bold text-slate-800">{transaction.description}</p>
                   <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span className="bg-slate-100 px-2 py-0.5 rounded-full capitalize">{transaction.method === 'income' ? 'Receita' : transaction.method}</span>
+                    <span className="bg-slate-100 px-2 py-0.5 rounded-full capitalize">
+                      {transaction.method === 'income' ? 'Receita' : 
+                       transaction.method === 'transfer' ? 'Transferência' : 
+                       transaction.method}
+                    </span>
                     <span>•</span>
-                    <span>{getBankName(transaction.bankId)}</span>
+                    <span>
+                      {transaction.method === 'transfer' 
+                        ? `${getBankName(transaction.bankId)} → ${getBankName(transaction.destinationBankId!)}`
+                        : getBankName(transaction.bankId)}
+                    </span>
                   </div>
                 </div>
               </div>
               <div className="text-right">
-                <p className={`font-bold ${transaction.method === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {transaction.method === 'income' ? '+' : '-'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
+                <p className={`font-bold ${
+                  transaction.method === 'income' ? 'text-emerald-600' : 
+                  transaction.method === 'transfer' ? 'text-orange-500' : 'text-rose-600'
+                }`}>
+                  {transaction.method === 'income' ? '+' : 
+                   transaction.method === 'transfer' ? '' : '-'} 
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
                 </p>
                 <p className="text-[10px] text-slate-400 flex items-center justify-end gap-1">
                   <Calendar size={10} />
