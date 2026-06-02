@@ -1,15 +1,99 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+"use client";
 
+import React, { useState } from 'react';
+import { Bank } from "@/src/types/finance";
+import BankCard from "@/src/components/BankCard";
+import AddBankDialog from "@/src/components/AddBankDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
+import { Wallet, TrendingUp, TrendingDown } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 const Index = () => {
+  const [banks, setBanks] = useState<Bank[]>([
+    { id: '1', name: 'Nubank', balance: 2500.50, color: '#8a05be' },
+    { id: '2', name: 'Itaú', balance: 12400.00, color: '#ec7000' },
+  ]);
+
+  const addBank = (newBank: Bank) => {
+    setBanks([...banks, newBank]);
+  };
+
+  const removeBank = (id: string) => {
+    setBanks(banks.filter(bank => bank.id !== id));
+  };
+
+  const totalBalance = banks.reduce((acc, bank) => acc + bank.balance, 0);
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">
-          Start building your amazing project here!
-        </p>
+    <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Meu Dashboard</h1>
+            <p className="text-slate-500">Bem-vindo de volta! Aqui está o resumo das suas finanças.</p>
+          </div>
+          <AddBankDialog onAdd={addBank} />
+        </header>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-primary text-primary-foreground border-none shadow-xl rounded-3xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-20">
+              <Wallet size={80} />
+            </div>
+            <CardContent className="pt-8">
+              <p className="text-primary-foreground/80 font-medium">Saldo Total Consolidado</p>
+              <h2 className="text-4xl font-bold mt-2">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBalance)}
+              </h2>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-lg rounded-3xl">
+            <CardContent className="pt-8 flex items-center gap-4">
+              <div className="bg-emerald-100 p-3 rounded-2xl text-emerald-600">
+                <TrendingUp size={24} />
+              </div>
+              <div>
+                <p className="text-slate-500 text-sm font-medium">Entradas (Mês)</p>
+                <h3 className="text-2xl font-bold text-emerald-600">R$ 0,00</h3>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-lg rounded-3xl">
+            <CardContent className="pt-8 flex items-center gap-4">
+              <div className="bg-rose-100 p-3 rounded-2xl text-rose-600">
+                <TrendingDown size={24} />
+              </div>
+              <div>
+                <p className="text-slate-500 text-sm font-medium">Saídas (Mês)</p>
+                <h3 className="text-2xl font-bold text-rose-600">R$ 0,00</h3>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Banks Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-800">Minhas Contas</h2>
+            <span className="text-sm text-slate-500 font-medium">{banks.length} contas ativas</span>
+          </div>
+          
+          {banks.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+              <p className="text-slate-400">Nenhum banco cadastrado. Comece adicionando um!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {banks.map((bank) => (
+                <BankCard key={bank.id} bank={bank} onRemove={removeBank} />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
       <MadeWithDyad />
     </div>
