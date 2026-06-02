@@ -5,13 +5,13 @@ export interface Bank {
   color: string;
 }
 
-export type TransactionType = 'income' | 'expense';
+export type TransactionMethod = 'debit' | 'credit' | 'income';
 
 export interface Transaction {
   id: string;
   description: string;
   amount: number;
-  type: TransactionType;
+  method: TransactionMethod;
   category: string;
   date: string;
   bankId: string;

@@ -30,10 +30,10 @@ const Index = () => {
   const addTransaction = (transaction: Transaction) => {
     setTransactions([transaction, ...transactions]);
     
-    // Atualiza o saldo do banco correspondente
     setBanks(prevBanks => prevBanks.map(bank => {
       if (bank.id === transaction.bankId) {
-        const newBalance = transaction.type === 'income' 
+        // Receita soma, Débito e Crédito subtraem do saldo
+        const newBalance = transaction.method === 'income' 
           ? bank.balance + transaction.amount 
           : bank.balance - transaction.amount;
         return { ...bank, balance: newBalance };
@@ -46,24 +46,23 @@ const Index = () => {
   
   const monthlyIncome = useMemo(() => 
     transactions
-      .filter(t => t.type === 'income')
+      .filter(t => t.method === 'income')
       .reduce((acc, t) => acc + t.amount, 0), 
   [transactions]);
 
   const monthlyExpenses = useMemo(() => 
     transactions
-      .filter(t => t.type === 'expense')
+      .filter(t => t.method !== 'income')
       .reduce((acc, t) => acc + t.amount, 0), 
   [transactions]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header Section */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Meu Dashboard</h1>
-            <p className="text-slate-500">Bem-vindo de volta! Aqui está o resumo das suas finanças.</p>
+            <p className="text-slate-500">Gerencie suas contas e transações em um só lugar.</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <AddTransactionDialog banks={banks} onAdd={addTransaction} />
@@ -71,7 +70,6 @@ const Index = () => {
           </div>
         </header>
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="bg-primary text-primary-foreground border-none shadow-xl rounded-3xl overflow-hidden relative">
             <div className="absolute top-0 right-0 p-4 opacity-20">
@@ -91,7 +89,7 @@ const Index = () => {
                 <TrendingUp size={24} />
               </div>
               <div>
-                <p className="text-slate-500 text-sm font-medium">Entradas (Mês)</p>
+                <p className="text-slate-500 text-sm font-medium">Receitas (Mês)</p>
                 <h3 className="text-2xl font-bold text-emerald-600">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyIncome)}
                 </h3>
@@ -105,7 +103,7 @@ const Index = () => {
                 <TrendingDown size={24} />
               </div>
               <div>
-                <p className="text-slate-500 text-sm font-medium">Saídas (Mês)</p>
+                <p className="text-slate-500 text-sm font-medium">Despesas (Mês)</p>
                 <h3 className="text-2xl font-bold text-rose-600">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyExpenses)}
                 </h3>
@@ -115,7 +113,6 @@ const Index = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Banks Section */}
           <section className="lg:col-span-1 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-800">Minhas Contas</h2>
@@ -135,7 +132,6 @@ const Index = () => {
             </div>
           </section>
 
-          {/* Transactions Section */}
           <section className="lg:col-span-2 space-y-4">
             <TransactionList transactions={transactions} banks={banks} />
           </section>
