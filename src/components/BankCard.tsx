@@ -4,7 +4,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trash2, Landmark } from "lucide-react";
-import { Bank } from "@/src/types/finance";
+import { Bank } from "@/types/finance";
 
 interface BankCardProps {
   bank: Bank;

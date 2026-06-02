@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Bank } from "@/src/types/finance";
-import BankCard from "@/src/components/BankCard";
-import AddBankDialog from "@/src/components/AddBankDialog";
+import { Bank } from "@/types/finance";
+import BankCard from "@/components/BankCard";
+import AddBankDialog from "@/components/AddBankDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";

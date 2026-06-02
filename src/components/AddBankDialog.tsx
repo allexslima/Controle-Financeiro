@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlusCircle } from "lucide-react";
-import { Bank } from "@/src/types/finance";
-import { showSuccess } from "@/src/utils/toast";
+import { Bank } from "@/types/finance";
+import { showSuccess } from "@/utils/toast";
 
 interface AddBankDialogProps {
   onAdd: (bank: Bank) => void;
