@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Bank } from "@/types/finance";
+import React, { useState, useMemo } from 'react';
+import { Bank, Transaction } from "@/types/finance";
 import BankCard from "@/components/BankCard";
 import AddBankDialog from "@/components/AddBankDialog";
+import AddTransactionDialog from "@/components/AddTransactionDialog";
+import TransactionList from "@/components/TransactionList";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,15 +16,45 @@ const Index = () => {
     { id: '2', name: 'Itaú', balance: 12400.00, color: '#ec7000' },
   ]);
 
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+
   const addBank = (newBank: Bank) => {
     setBanks([...banks, newBank]);
   };
 
   const removeBank = (id: string) => {
     setBanks(banks.filter(bank => bank.id !== id));
+    setTransactions(transactions.filter(t => t.bankId !== id));
   };
 
-  const totalBalance = banks.reduce((acc, bank) => acc + bank.balance, 0);
+  const addTransaction = (transaction: Transaction) => {
+    setTransactions([transaction, ...transactions]);
+    
+    // Atualiza o saldo do banco correspondente
+    setBanks(prevBanks => prevBanks.map(bank => {
+      if (bank.id === transaction.bankId) {
+        const newBalance = transaction.type === 'income' 
+          ? bank.balance + transaction.amount 
+          : bank.balance - transaction.amount;
+        return { ...bank, balance: newBalance };
+      }
+      return bank;
+    }));
+  };
+
+  const totalBalance = useMemo(() => banks.reduce((acc, bank) => acc + bank.balance, 0), [banks]);
+  
+  const monthlyIncome = useMemo(() => 
+    transactions
+      .filter(t => t.type === 'income')
+      .reduce((acc, t) => acc + t.amount, 0), 
+  [transactions]);
+
+  const monthlyExpenses = useMemo(() => 
+    transactions
+      .filter(t => t.type === 'expense')
+      .reduce((acc, t) => acc + t.amount, 0), 
+  [transactions]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8">
@@ -33,7 +65,10 @@ const Index = () => {
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Meu Dashboard</h1>
             <p className="text-slate-500">Bem-vindo de volta! Aqui está o resumo das suas finanças.</p>
           </div>
-          <AddBankDialog onAdd={addBank} />
+          <div className="flex flex-wrap gap-3">
+            <AddTransactionDialog banks={banks} onAdd={addTransaction} />
+            <AddBankDialog onAdd={addBank} />
+          </div>
         </header>
 
         {/* Summary Cards */}
@@ -57,7 +92,9 @@ const Index = () => {
               </div>
               <div>
                 <p className="text-slate-500 text-sm font-medium">Entradas (Mês)</p>
-                <h3 className="text-2xl font-bold text-emerald-600">R$ 0,00</h3>
+                <h3 className="text-2xl font-bold text-emerald-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyIncome)}
+                </h3>
               </div>
             </CardContent>
           </Card>
@@ -69,31 +106,40 @@ const Index = () => {
               </div>
               <div>
                 <p className="text-slate-500 text-sm font-medium">Saídas (Mês)</p>
-                <h3 className="text-2xl font-bold text-rose-600">R$ 0,00</h3>
+                <h3 className="text-2xl font-bold text-rose-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyExpenses)}
+                </h3>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Banks Section */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-800">Minhas Contas</h2>
-            <span className="text-sm text-slate-500 font-medium">{banks.length} contas ativas</span>
-          </div>
-          
-          {banks.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-              <p className="text-slate-400">Nenhum banco cadastrado. Comece adicionando um!</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Banks Section */}
+          <section className="lg:col-span-1 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-800">Minhas Contas</h2>
+              <span className="text-sm text-slate-500 font-medium">{banks.length}</span>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {banks.map((bank) => (
-                <BankCard key={bank.id} bank={bank} onRemove={removeBank} />
-              ))}
+            
+            <div className="grid grid-cols-1 gap-4">
+              {banks.length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400 text-sm">Nenhuma conta.</p>
+                </div>
+              ) : (
+                banks.map((bank) => (
+                  <BankCard key={bank.id} bank={bank} onRemove={removeBank} />
+                ))
+              )}
             </div>
-          )}
-        </section>
+          </section>
+
+          {/* Transactions Section */}
+          <section className="lg:col-span-2 space-y-4">
+            <TransactionList transactions={transactions} banks={banks} />
+          </section>
+        </div>
       </div>
       <MadeWithDyad />
     </div>
