@@ -6,11 +6,13 @@ import BankCard from "@/components/BankCard";
 import AddBankDialog from "@/components/AddBankDialog";
 import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
+import EditTransactionDialog from "@/components/EditTransactionDialog";
 import TransactionList from "@/components/TransactionList";
 import BankHistorySheet from "@/components/BankHistorySheet";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Wallet, TrendingUp, TrendingDown, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { showSuccess } from "@/utils/toast";
 
 const Index = () => {
   const [banks, setBanks] = useState<Bank[]>([
@@ -20,6 +22,7 @@ const Index = () => {
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedBankForHistory, setSelectedBankForHistory] = useState<Bank | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const addBank = (newBank: Bank) => {
     setBanks([...banks, newBank]);
@@ -30,26 +33,54 @@ const Index = () => {
     setTransactions(transactions.filter(t => t.bankId !== id && t.destinationBankId !== id));
   };
 
-  const addTransaction = (transaction: Transaction) => {
-    setTransactions([transaction, ...transactions]);
-    
+  const applyTransactionToBalance = (transaction: Transaction, reverse = false) => {
     setBanks(prevBanks => prevBanks.map(bank => {
+      const multiplier = reverse ? -1 : 1;
+      
       if (bank.id === transaction.bankId) {
         let newBalance = bank.balance;
         if (transaction.method === 'income') {
-          newBalance += transaction.amount;
+          newBalance += (transaction.amount * multiplier);
         } else {
-          newBalance -= transaction.amount;
+          newBalance -= (transaction.amount * multiplier);
         }
         return { ...bank, balance: newBalance };
       }
       
       if (transaction.method === 'transfer' && bank.id === transaction.destinationBankId) {
-        return { ...bank, balance: bank.balance + transaction.amount };
+        return { ...bank, balance: bank.balance + (transaction.amount * multiplier) };
       }
       
       return bank;
     }));
+  };
+
+  const addTransaction = (transaction: Transaction) => {
+    setTransactions([transaction, ...transactions]);
+    applyTransactionToBalance(transaction);
+  };
+
+  const deleteTransaction = (id: string) => {
+    const transaction = transactions.find(t => t.id === id);
+    if (transaction) {
+      applyTransactionToBalance(transaction, true);
+      setTransactions(transactions.filter(t => t.id !== id));
+      showSuccess("Transação excluída!");
+    }
+  };
+
+  const updateTransaction = (updatedTransaction: Transaction) => {
+    const oldTransaction = transactions.find(t => t.id === updatedTransaction.id);
+    if (oldTransaction) {
+      // Reverte o saldo antigo
+      applyTransactionToBalance(oldTransaction, true);
+      // Aplica o novo saldo
+      applyTransactionToBalance(updatedTransaction);
+      
+      setTransactions(transactions.map(t => 
+        t.id === updatedTransaction.id ? updatedTransaction : t
+      ));
+    }
   };
 
   const totalBalance = useMemo(() => 
@@ -166,7 +197,12 @@ const Index = () => {
           </section>
 
           <section className="lg:col-span-2 space-y-4">
-            <TransactionList transactions={transactions} banks={banks} />
+            <TransactionList 
+              transactions={transactions} 
+              banks={banks} 
+              onEdit={setEditingTransaction}
+              onDelete={deleteTransaction}
+            />
           </section>
         </div>
       </div>
@@ -175,6 +211,13 @@ const Index = () => {
         bank={selectedBankForHistory} 
         transactions={transactions} 
         onClose={() => setSelectedBankForHistory(null)} 
+      />
+
+      <EditTransactionDialog 
+        transaction={editingTransaction}
+        banks={banks}
+        onUpdate={updateTransaction}
+        onClose={() => setEditingTransaction(null)}
       />
 
       <MadeWithDyad />

@@ -2,16 +2,19 @@
 
 import React from 'react';
 import { Transaction, Bank } from "@/types/finance";
-import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight } from "lucide-react";
+import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Button } from "@/components/ui/button";
 
 interface TransactionListProps {
   transactions: Transaction[];
   banks: Bank[];
+  onEdit: (transaction: Transaction) => void;
+  onDelete: (id: string) => void;
 }
 
-const TransactionList = ({ transactions, banks }: TransactionListProps) => {
+const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionListProps) => {
   const getBankName = (id: string) => banks.find(b => b.id === id)?.name || "Conta removida";
 
   const getMethodIcon = (method: string) => {
@@ -46,7 +49,7 @@ const TransactionList = ({ transactions, banks }: TransactionListProps) => {
           </div>
         ) : (
           transactions.map((transaction) => (
-            <div key={transaction.id} className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between">
+            <div key={transaction.id} className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between group">
               <div className="flex items-center gap-4">
                 <div className={`p-2 rounded-2xl ${getMethodBg(transaction.method)}`}>
                   {getMethodIcon(transaction.method)}
@@ -68,19 +71,39 @@ const TransactionList = ({ transactions, banks }: TransactionListProps) => {
                   </div>
                 </div>
               </div>
-              <div className="text-right">
-                <p className={`font-bold ${
-                  transaction.method === 'income' ? 'text-emerald-600' : 
-                  transaction.method === 'transfer' ? 'text-orange-500' : 'text-rose-600'
-                }`}>
-                  {transaction.method === 'income' ? '+' : 
-                   transaction.method === 'transfer' ? '' : '-'} 
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
-                </p>
-                <p className="text-[10px] text-slate-400 flex items-center justify-end gap-1">
-                  <Calendar size={10} />
-                  {format(new Date(transaction.date), "dd 'de' MMM", { locale: ptBR })}
-                </p>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className={`font-bold ${
+                    transaction.method === 'income' ? 'text-emerald-600' : 
+                    transaction.method === 'transfer' ? 'text-orange-500' : 'text-rose-600'
+                  }`}>
+                    {transaction.method === 'income' ? '+' : 
+                     transaction.method === 'transfer' ? '' : '-'} 
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
+                  </p>
+                  <p className="text-[10px] text-slate-400 flex items-center justify-end gap-1">
+                    <Calendar size={10} />
+                    {format(new Date(transaction.date), "dd 'de' MMM", { locale: ptBR })}
+                  </p>
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-slate-400 hover:text-primary"
+                    onClick={() => onEdit(transaction)}
+                  >
+                    <Pencil size={14} />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-slate-400 hover:text-destructive"
+                    onClick={() => onDelete(transaction.id)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
               </div>
             </div>
           ))
