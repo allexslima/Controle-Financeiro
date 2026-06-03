@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -31,9 +31,23 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
   const [destinationBankId, setDestinationBankId] = useState("");
   const [category, setCategory] = useState("");
 
+  // Filtra os bancos disponíveis com base no método selecionado
+  const filteredBanks = banks.filter(bank => {
+    if (method === 'credit') return bank.type === 'credit_card';
+    return bank.type === 'account';
+  });
+
+  // Limpa a seleção se o banco atual não estiver na lista filtrada ao mudar o método
+  useEffect(() => {
+    if (bankId && !filteredBanks.find(b => b.id === bankId)) {
+      setBankId("");
+    }
+  }, [method, filteredBanks, bankId]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!description || !amount || !bankId) return;
+    
     if (method === 'transfer' && (!destinationBankId || bankId === destinationBankId)) {
       showError("Selecione uma conta de destino diferente da origem.");
       return;
@@ -62,6 +76,13 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
     setBankId("");
     setDestinationBankId("");
     setCategory("");
+    setMethod("debit");
+  };
+
+  const getBankLabel = () => {
+    if (method === 'credit') return "Cartão de Crédito";
+    if (method === 'transfer') return "Conta de Origem";
+    return "Conta Bancária";
   };
 
   return (
@@ -125,17 +146,23 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
 
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
-              <Label>{method === 'transfer' ? 'Conta de Origem' : 'Conta Bancária'}</Label>
+              <Label>{getBankLabel()}</Label>
               <Select onValueChange={setBankId} value={bankId} required>
                 <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Selecione a conta" />
+                  <SelectValue placeholder={`Selecione ${method === 'credit' ? 'o cartão' : 'a conta'}`} />
                 </SelectTrigger>
                 <SelectContent>
-                  {banks.map((bank) => (
-                    <SelectItem key={bank.id} value={bank.id}>
-                      {bank.name}
-                    </SelectItem>
-                  ))}
+                  {filteredBanks.length === 0 ? (
+                    <div className="p-2 text-xs text-center text-muted-foreground">
+                      Nenhum(a) {method === 'credit' ? 'cartão' : 'conta'} cadastrado(a).
+                    </div>
+                  ) : (
+                    filteredBanks.map((bank) => (
+                      <SelectItem key={bank.id} value={bank.id}>
+                        {bank.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -148,7 +175,7 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
                     <SelectValue placeholder="Selecione o destino" />
                   </SelectTrigger>
                   <SelectContent>
-                    {banks.map((bank) => (
+                    {banks.filter(b => b.type === 'account').map((bank) => (
                       <SelectItem key={bank.id} value={bank.id} disabled={bank.id === bankId}>
                         {bank.name}
                       </SelectItem>
