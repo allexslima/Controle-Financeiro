@@ -3,7 +3,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2, Landmark } from "lucide-react";
+import { Trash2, Landmark, CreditCard } from "lucide-react";
 import { Bank } from "@/types/finance";
 
 interface BankCardProps {
@@ -18,28 +18,41 @@ const BankCard = ({ bank, onRemove }: BankCardProps) => {
   }).format(bank.balance);
 
   return (
-    <Card className="overflow-hidden border-none shadow-lg transition-all hover:shadow-xl">
+    <Card className="overflow-hidden border-none shadow-lg transition-all hover:shadow-xl bg-white">
       <div 
         className="h-2 w-full" 
         style={{ backgroundColor: bank.color }}
       />
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Landmark className="h-4 w-4" style={{ color: bank.color }} />
+          {bank.type === 'account' ? (
+            <Landmark className="h-4 w-4" style={{ color: bank.color }} />
+          ) : (
+            <CreditCard className="h-4 w-4" style={{ color: bank.color }} />
+          )}
           {bank.name}
         </CardTitle>
         <Button 
           variant="ghost" 
           size="icon" 
           onClick={() => onRemove(bank.id)}
-          className="text-muted-foreground hover:text-destructive transition-colors"
+          className="text-muted-foreground hover:text-destructive transition-colors h-8 w-8"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{formattedBalance}</div>
-        <p className="text-xs text-muted-foreground mt-1">Saldo Atual</p>
+        <div className="flex justify-between items-center mt-1">
+          <p className="text-xs text-muted-foreground">
+            {bank.type === 'account' ? 'Saldo Atual' : 'Fatura Atual'}
+          </p>
+          {bank.type === 'credit_card' && bank.closingDay && (
+            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full text-slate-600">
+              Fecha dia {bank.closingDay}
+            </span>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

@@ -7,13 +7,13 @@ import AddBankDialog from "@/components/AddBankDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import TransactionList from "@/components/TransactionList";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { Wallet, TrendingUp, TrendingDown } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 const Index = () => {
   const [banks, setBanks] = useState<Bank[]>([
-    { id: '1', name: 'Nubank', balance: 2500.50, color: '#8a05be' },
-    { id: '2', name: 'Itaú', balance: 12400.00, color: '#ec7000' },
+    { id: '1', name: 'Nubank', balance: 2500.50, color: '#8a05be', type: 'account' },
+    { id: '2', name: 'Itaú', balance: 12400.00, color: '#ec7000', type: 'account' },
   ]);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -31,19 +31,16 @@ const Index = () => {
     setTransactions([transaction, ...transactions]);
     
     setBanks(prevBanks => prevBanks.map(bank => {
-      // Lógica para conta de origem (ou conta única)
       if (bank.id === transaction.bankId) {
         let newBalance = bank.balance;
         if (transaction.method === 'income') {
           newBalance += transaction.amount;
         } else {
-          // Débito, Crédito ou Transferência (saída da origem)
           newBalance -= transaction.amount;
         }
         return { ...bank, balance: newBalance };
       }
       
-      // Lógica para conta de destino (apenas em transferências)
       if (transaction.method === 'transfer' && bank.id === transaction.destinationBankId) {
         return { ...bank, balance: bank.balance + transaction.amount };
       }
@@ -52,7 +49,13 @@ const Index = () => {
     }));
   };
 
-  const totalBalance = useMemo(() => banks.reduce((acc, bank) => acc + bank.balance, 0), [banks]);
+  const totalBalance = useMemo(() => 
+    banks.filter(b => b.type === 'account').reduce((acc, bank) => acc + bank.balance, 0), 
+  [banks]);
+
+  const totalCredit = useMemo(() => 
+    banks.filter(b => b.type === 'credit_card').reduce((acc, bank) => acc + bank.balance, 0), 
+  [banks]);
   
   const monthlyIncome = useMemo(() => 
     transactions
@@ -72,7 +75,7 @@ const Index = () => {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Meu Dashboard</h1>
-            <p className="text-slate-500">Gerencie suas contas e transações em um só lugar.</p>
+            <p className="text-slate-500">Gerencie suas contas e cartões em um só lugar.</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <AddTransactionDialog banks={banks} onAdd={addTransaction} />
@@ -80,41 +83,52 @@ const Index = () => {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card className="bg-primary text-primary-foreground border-none shadow-xl rounded-3xl overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-20">
-              <Wallet size={80} />
-            </div>
             <CardContent className="pt-8">
-              <p className="text-primary-foreground/80 font-medium">Saldo Total Consolidado</p>
-              <h2 className="text-4xl font-bold mt-2">
+              <p className="text-primary-foreground/80 font-medium text-sm">Saldo em Contas</p>
+              <h2 className="text-3xl font-bold mt-1">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBalance)}
               </h2>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-lg rounded-3xl">
+          <Card className="bg-white border-none shadow-lg rounded-3xl">
+            <CardContent className="pt-8 flex items-center gap-4">
+              <div className="bg-purple-100 p-3 rounded-2xl text-purple-600">
+                <CreditCard size={24} />
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs font-medium">Total em Cartões</p>
+                <h3 className="text-xl font-bold text-purple-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCredit)}
+                </h3>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border-none shadow-lg rounded-3xl">
             <CardContent className="pt-8 flex items-center gap-4">
               <div className="bg-emerald-100 p-3 rounded-2xl text-emerald-600">
                 <TrendingUp size={24} />
               </div>
               <div>
-                <p className="text-slate-500 text-sm font-medium">Receitas (Mês)</p>
-                <h3 className="text-2xl font-bold text-emerald-600">
+                <p className="text-slate-500 text-xs font-medium">Receitas (Mês)</p>
+                <h3 className="text-xl font-bold text-emerald-600">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyIncome)}
                 </h3>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-lg rounded-3xl">
+          <Card className="bg-white border-none shadow-lg rounded-3xl">
             <CardContent className="pt-8 flex items-center gap-4">
               <div className="bg-rose-100 p-3 rounded-2xl text-rose-600">
                 <TrendingDown size={24} />
               </div>
               <div>
-                <p className="text-slate-500 text-sm font-medium">Despesas (Mês)</p>
-                <h3 className="text-2xl font-bold text-rose-600">
+                <p className="text-slate-500 text-xs font-medium">Despesas (Mês)</p>
+                <h3 className="text-xl font-bold text-rose-600">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyExpenses)}
                 </h3>
               </div>
@@ -125,14 +139,14 @@ const Index = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <section className="lg:col-span-1 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">Minhas Contas</h2>
+              <h2 className="text-xl font-bold text-slate-800">Minhas Contas e Cartões</h2>
               <span className="text-sm text-slate-500 font-medium">{banks.length}</span>
             </div>
             
             <div className="grid grid-cols-1 gap-4">
               {banks.length === 0 ? (
                 <div className="text-center py-8 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                  <p className="text-slate-400 text-sm">Nenhuma conta.</p>
+                  <p className="text-slate-400 text-sm">Nenhuma conta ou cartão.</p>
                 </div>
               ) : (
                 banks.map((bank) => (
