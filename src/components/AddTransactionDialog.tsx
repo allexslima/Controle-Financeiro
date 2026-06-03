@@ -31,13 +31,11 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
   const [destinationBankId, setDestinationBankId] = useState("");
   const [category, setCategory] = useState("");
 
-  // Filtra os bancos disponíveis com base no método selecionado
   const filteredBanks = banks.filter(bank => {
     if (method === 'credit') return bank.type === 'credit_card';
     return bank.type === 'account';
   });
 
-  // Limpa a seleção se o banco atual não estiver na lista filtrada ao mudar o método
   useEffect(() => {
     if (bankId && !filteredBanks.find(b => b.id === bankId)) {
       setBankId("");
@@ -79,21 +77,15 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
     setMethod("debit");
   };
 
-  const getBankLabel = () => {
-    if (method === 'credit') return "Cartão de Crédito";
-    if (method === 'transfer') return "Conta de Origem";
-    return "Conta Bancária";
-  };
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2 rounded-full px-6 border-primary text-primary hover:bg-primary/5">
-          <PlusCircle className="h-4 w-4" />
+        <Button className="gap-2 rounded-full px-8 py-6 text-lg font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
+          <PlusCircle className="h-5 w-5" />
           Nova Transação
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[450px] rounded-2xl">
+      <DialogContent className="sm:max-w-[450px] rounded-[2rem]">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Nova Movimentação</DialogTitle>
         </DialogHeader>
@@ -146,23 +138,15 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
 
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
-              <Label>{getBankLabel()}</Label>
+              <Label>Conta/Cartão</Label>
               <Select onValueChange={setBankId} value={bankId} required>
                 <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder={`Selecione ${method === 'credit' ? 'o cartão' : 'a conta'}`} />
+                  <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredBanks.length === 0 ? (
-                    <div className="p-2 text-xs text-center text-muted-foreground">
-                      Nenhum(a) {method === 'credit' ? 'cartão' : 'conta'} cadastrado(a).
-                    </div>
-                  ) : (
-                    filteredBanks.map((bank) => (
-                      <SelectItem key={bank.id} value={bank.id}>
-                        {bank.name}
-                      </SelectItem>
-                    ))
-                  )}
+                  {filteredBanks.map((bank) => (
+                    <SelectItem key={bank.id} value={bank.id}>{bank.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -185,19 +169,6 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
               </div>
             )}
           </div>
-
-          {method !== 'transfer' && (
-            <div className="space-y-2">
-              <Label htmlFor="category">Categoria</Label>
-              <Input
-                id="category"
-                placeholder="Ex: Alimentação, Lazer..."
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="rounded-xl"
-              />
-            </div>
-          )}
 
           <DialogFooter className="pt-4">
             <Button type="submit" className="w-full rounded-xl py-6 text-lg">Confirmar</Button>

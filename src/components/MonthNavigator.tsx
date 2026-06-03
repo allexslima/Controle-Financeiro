@@ -16,19 +16,22 @@ const MonthNavigator = ({ currentDate, onChange }: MonthNavigatorProps) => {
   const handleNext = () => onChange(addMonths(currentDate, 1));
 
   return (
-    <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
+    <div className="flex items-center gap-6 bg-white p-3 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100">
       <Button 
         variant="ghost" 
         size="icon" 
         onClick={handlePrev}
-        className="rounded-xl hover:bg-slate-50"
+        className="rounded-full h-12 w-12 hover:bg-slate-50 text-slate-400 hover:text-primary transition-all"
       >
-        <ChevronLeft size={20} />
+        <ChevronLeft size={24} />
       </Button>
       
-      <div className="flex items-center gap-2 px-4 min-w-[180px] justify-center">
-        <Calendar size={18} className="text-primary" />
-        <span className="text-sm font-bold text-slate-800 capitalize">
+      <div className="flex flex-col items-center px-8 min-w-[220px]">
+        <div className="flex items-center gap-2 text-primary mb-0.5">
+          <Calendar size={14} className="opacity-50" />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Período Selecionado</span>
+        </div>
+        <span className="text-xl font-black text-slate-900 capitalize">
           {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
         </span>
       </div>
@@ -37,9 +40,9 @@ const MonthNavigator = ({ currentDate, onChange }: MonthNavigatorProps) => {
         variant="ghost" 
         size="icon" 
         onClick={handleNext}
-        className="rounded-xl hover:bg-slate-50"
+        className="rounded-full h-12 w-12 hover:bg-slate-50 text-slate-400 hover:text-primary transition-all"
       >
-        <ChevronRight size={20} />
+        <ChevronRight size={24} />
       </Button>
     </div>
   );
