@@ -7,6 +7,7 @@ import AddBankDialog from "@/components/AddBankDialog";
 import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import TransactionList from "@/components/TransactionList";
+import BankHistorySheet from "@/components/BankHistorySheet";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Wallet, TrendingUp, TrendingDown, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +19,7 @@ const Index = () => {
   ]);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [selectedBankForHistory, setSelectedBankForHistory] = useState<Bank | null>(null);
 
   const addBank = (newBank: Bank) => {
     setBanks([...banks, newBank]);
@@ -152,7 +154,12 @@ const Index = () => {
                 </div>
               ) : (
                 banks.map((bank) => (
-                  <BankCard key={bank.id} bank={bank} onRemove={removeBank} />
+                  <BankCard 
+                    key={bank.id} 
+                    bank={bank} 
+                    onRemove={removeBank} 
+                    onClick={setSelectedBankForHistory}
+                  />
                 ))
               )}
             </div>
@@ -163,6 +170,13 @@ const Index = () => {
           </section>
         </div>
       </div>
+
+      <BankHistorySheet 
+        bank={selectedBankForHistory} 
+        transactions={transactions} 
+        onClose={() => setSelectedBankForHistory(null)} 
+      />
+
       <MadeWithDyad />
     </div>
   );

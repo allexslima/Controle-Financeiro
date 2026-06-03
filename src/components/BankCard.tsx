@@ -9,16 +9,20 @@ import { Bank } from "@/types/finance";
 interface BankCardProps {
   bank: Bank;
   onRemove: (id: string) => void;
+  onClick: (bank: Bank) => void;
 }
 
-const BankCard = ({ bank, onRemove }: BankCardProps) => {
+const BankCard = ({ bank, onRemove, onClick }: BankCardProps) => {
   const formattedBalance = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(bank.balance);
 
   return (
-    <Card className="overflow-hidden border-none shadow-lg transition-all hover:shadow-xl bg-white">
+    <Card 
+      className="overflow-hidden border-none shadow-lg transition-all hover:shadow-xl bg-white cursor-pointer group"
+      onClick={() => onClick(bank)}
+    >
       <div 
         className="h-2 w-full" 
         style={{ backgroundColor: bank.color }}
@@ -35,8 +39,11 @@ const BankCard = ({ bank, onRemove }: BankCardProps) => {
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={() => onRemove(bank.id)}
-          className="text-muted-foreground hover:text-destructive transition-colors h-8 w-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(bank.id);
+          }}
+          className="text-muted-foreground hover:text-destructive transition-colors h-8 w-8 opacity-0 group-hover:opacity-100"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
