@@ -12,58 +12,61 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Landmark } from "lucide-react";
+import { CreditCard, PlusCircle } from "lucide-react";
 import { Bank } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
 
-interface AddBankDialogProps {
+interface AddCreditCardDialogProps {
   onAdd: (bank: Bank) => void;
 }
 
-const AddBankDialog = ({ onAdd }: AddBankDialogProps) => {
+const AddCreditCardDialog = ({ onAdd }: AddCreditCardDialogProps) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [balance, setBalance] = useState("");
-  const [color, setColor] = useState("#3b82f6");
+  const [closingDay, setClosingDay] = useState("");
+  const [color, setColor] = useState("#8a05be");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !balance) return;
+    if (!name || !balance || !closingDay) return;
 
-    const newBank: Bank = {
+    const newCard: Bank = {
       id: Math.random().toString(36).substr(2, 9),
       name,
       balance: parseFloat(balance),
       color,
-      type: 'account',
+      type: 'credit_card',
+      closingDay: parseInt(closingDay),
     };
 
-    onAdd(newBank);
-    showSuccess(`Conta bancária adicionada com sucesso!`);
+    onAdd(newCard);
+    showSuccess(`Cartão de crédito adicionado com sucesso!`);
     setName("");
     setBalance("");
+    setClosingDay("");
     setOpen(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2 border-primary text-primary hover:bg-primary/5 rounded-full px-6">
-          <Landmark className="h-4 w-4" />
-          Nova Conta
+        <Button variant="outline" className="gap-2 border-purple-600 text-purple-600 hover:bg-purple-50 rounded-full px-6">
+          <CreditCard className="h-4 w-4" />
+          Novo Cartão
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Nova Conta Bancária</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">Novo Cartão de Crédito</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="name">Nome do Banco</Label>
+            <Label htmlFor="name">Nome do Cartão</Label>
             <Input
               id="name"
-              placeholder="Ex: Nubank, Itaú, Inter..."
+              placeholder="Ex: Nubank Ultravioleta, XP Visa..."
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="rounded-xl"
@@ -72,7 +75,7 @@ const AddBankDialog = ({ onAdd }: AddBankDialogProps) => {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="balance">Saldo Inicial (R$)</Label>
+            <Label htmlFor="balance">Limite Utilizado (R$)</Label>
             <Input
               id="balance"
               type="number"
@@ -86,7 +89,22 @@ const AddBankDialog = ({ onAdd }: AddBankDialogProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="color">Cor da Conta</Label>
+            <Label htmlFor="closingDay">Dia de Fechamento da Fatura</Label>
+            <Input
+              id="closingDay"
+              type="number"
+              min="1"
+              max="31"
+              placeholder="Ex: 10"
+              value={closingDay}
+              onChange={(e) => setClosingDay(e.target.value)}
+              className="rounded-xl"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="color">Cor do Cartão</Label>
             <div className="flex gap-3 items-center">
               <Input
                 id="color"
@@ -100,7 +118,7 @@ const AddBankDialog = ({ onAdd }: AddBankDialogProps) => {
           </div>
           
           <DialogFooter className="pt-4">
-            <Button type="submit" className="w-full rounded-xl py-6 text-lg">Salvar Conta</Button>
+            <Button type="submit" className="w-full rounded-xl py-6 text-lg bg-purple-600 hover:bg-purple-700">Salvar Cartão</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -108,4 +126,4 @@ const AddBankDialog = ({ onAdd }: AddBankDialogProps) => {
   );
 };
 
-export default AddBankDialog;
+export default AddCreditCardDialog;

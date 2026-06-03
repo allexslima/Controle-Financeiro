@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Bank, Transaction } from "@/types/finance";
 import BankCard from "@/components/BankCard";
 import AddBankDialog from "@/components/AddBankDialog";
+import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import TransactionList from "@/components/TransactionList";
 import { MadeWithDyad } from "@/components/made-with-dyad";
@@ -75,11 +76,12 @@ const Index = () => {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Meu Dashboard</h1>
-            <p className="text-slate-500">Gerencie suas contas e cartões em um só lugar.</p>
+            <p className="text-slate-500">Gerencie suas finanças com clareza.</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <AddTransactionDialog banks={banks} onAdd={addTransaction} />
             <AddBankDialog onAdd={addBank} />
+            <AddCreditCardDialog onAdd={addBank} />
           </div>
         </header>
 
