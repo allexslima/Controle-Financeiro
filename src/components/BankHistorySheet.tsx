@@ -10,15 +10,18 @@ import {
 import { Bank, Transaction } from "@/types/finance";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowUpCircle, Wallet, CreditCard, ArrowLeftRight } from "lucide-react";
+import { ArrowUpCircle, Wallet, CreditCard, ArrowLeftRight, Pencil, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface BankHistorySheetProps {
   bank: Bank | null;
   transactions: Transaction[];
   onClose: () => void;
+  onEdit: (transaction: Transaction) => void;
+  onDelete: (id: string) => void;
 }
 
-const BankHistorySheet = ({ bank, transactions, onClose }: BankHistorySheetProps) => {
+const BankHistorySheet = ({ bank, transactions, onClose, onEdit, onDelete }: BankHistorySheetProps) => {
   if (!bank) return null;
 
   const bankTransactions = transactions.filter(
@@ -77,7 +80,7 @@ const BankHistorySheet = ({ bank, transactions, onClose }: BankHistorySheetProps
                 <h4 className="text-sm font-bold text-slate-900 capitalize px-1">{month}</h4>
                 <div className="space-y-1">
                   {items.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors">
+                    <div key={item.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors group">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-white shadow-sm rounded-lg">
                           {getMethodIcon(item.method)}
@@ -89,15 +92,35 @@ const BankHistorySheet = ({ bank, transactions, onClose }: BankHistorySheetProps
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={`text-sm font-bold ${
-                          item.method === 'income' ? 'text-emerald-600' : 
-                          item.method === 'transfer' && item.destinationBankId === bank.id ? 'text-emerald-600' :
-                          'text-rose-600'
-                        }`}>
-                          {item.method === 'income' || (item.method === 'transfer' && item.destinationBankId === bank.id) ? '+' : '-'} 
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)}
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className={`text-sm font-bold ${
+                            item.method === 'income' ? 'text-emerald-600' : 
+                            item.method === 'transfer' && item.destinationBankId === bank.id ? 'text-emerald-600' :
+                            'text-rose-600'
+                          }`}>
+                            {item.method === 'income' || (item.method === 'transfer' && item.destinationBankId === bank.id) ? '+' : '-'} 
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)}
+                          </p>
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7 text-slate-400 hover:text-primary"
+                            onClick={() => onEdit(item)}
+                          >
+                            <Pencil size={12} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7 text-slate-400 hover:text-destructive"
+                            onClick={() => onDelete(item.id)}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}

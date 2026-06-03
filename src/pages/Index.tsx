@@ -211,6 +211,8 @@ const Index = () => {
         bank={selectedBankForHistory} 
         transactions={transactions} 
         onClose={() => setSelectedBankForHistory(null)} 
+        onEdit={setEditingTransaction}
+        onDelete={deleteTransaction}
       />
 
       <EditTransactionDialog 
