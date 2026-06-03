@@ -14,78 +14,19 @@ import MonthNavigator from "@/components/MonthNavigator";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { showSuccess } from "@/utils/toast";
 import { isSameMonth, parseISO } from "date-fns";
+import { useFinance } from "@/context/FinanceContext";
 
 const Index = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [banks, setBanks] = useState<Bank[]>([
-    { id: '1', name: 'Nubank', balance: 2500.50, color: '#8a05be', type: 'account' },
-    { id: '2', name: 'Itaú', balance: 12400.00, color: '#ec7000', type: 'account' },
-  ]);
-
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const { banks, transactions, addBank, removeBank, addTransaction, deleteTransaction, updateTransaction } = useFinance();
+  
   const [selectedBankForHistory, setSelectedBankForHistory] = useState<Bank | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
-  // Filtra transações pelo mês selecionado
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
   }, [transactions, currentDate]);
-
-  const addBank = (newBank: Bank) => {
-    setBanks([...banks, newBank]);
-  };
-
-  const removeBank = (id: string) => {
-    setBanks(banks.filter(bank => bank.id !== id));
-    setTransactions(transactions.filter(t => t.bankId !== id && t.destinationBankId !== id));
-  };
-
-  const applyTransactionToBalance = (transaction: Transaction, reverse = false) => {
-    setBanks(prevBanks => prevBanks.map(bank => {
-      const multiplier = reverse ? -1 : 1;
-      
-      if (bank.id === transaction.bankId) {
-        let newBalance = bank.balance;
-        if (transaction.method === 'income') {
-          newBalance += (transaction.amount * multiplier);
-        } else {
-          newBalance -= (transaction.amount * multiplier);
-        }
-        return { ...bank, balance: newBalance };
-      }
-      
-      if (transaction.method === 'transfer' && bank.id === transaction.destinationBankId) {
-        return { ...bank, balance: bank.balance + (transaction.amount * multiplier) };
-      }
-      
-      return bank;
-    }));
-  };
-
-  const addTransaction = (transaction: Transaction) => {
-    setTransactions([transaction, ...transactions]);
-    applyTransactionToBalance(transaction);
-  };
-
-  const deleteTransaction = (id: string) => {
-    const transaction = transactions.find(t => t.id === id);
-    if (transaction) {
-      applyTransactionToBalance(transaction, true);
-      setTransactions(transactions.filter(t => t.id !== id));
-      showSuccess("Transação excluída!");
-    }
-  };
-
-  const updateTransaction = (updatedTransaction: Transaction) => {
-    const oldTransaction = transactions.find(t => t.id === updatedTransaction.id);
-    if (oldTransaction) {
-      applyTransactionToBalance(oldTransaction, true);
-      applyTransactionToBalance(updatedTransaction);
-      setTransactions(transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t));
-    }
-  };
 
   const totalBalance = useMemo(() => 
     banks.filter(b => b.type === 'account').reduce((acc, bank) => acc + bank.balance, 0), 
@@ -116,7 +57,7 @@ const Index = () => {
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <h1 className="text-3xl font-black tracking-tight text-slate-900">Dashboard</h1>
-              <p className="text-slate-500 font-medium">Bem-vindo de volta ao seu controle financeiro.</p>
+              <p className="text-slate-500 font-medium">Resumo financeiro do mês.</p>
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
@@ -184,9 +125,6 @@ const Index = () => {
             <section className="lg:col-span-8 space-y-6">
               <div className="flex items-center justify-between px-2">
                 <h2 className="text-xl font-black text-slate-900">Transações Recentes</h2>
-                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
-                  {filteredTransactions.length} este mês
-                </span>
               </div>
               <TransactionList 
                 transactions={filteredTransactions} 
@@ -206,20 +144,14 @@ const Index = () => {
               </div>
               
               <div className="space-y-4">
-                {banks.length === 0 ? (
-                  <div className="text-center py-12 bg-white rounded-[2rem] border-2 border-dashed border-slate-100">
-                    <p className="text-slate-400 text-sm font-medium">Nenhuma conta cadastrada.</p>
-                  </div>
-                ) : (
-                  banks.map((bank) => (
-                    <BankCard 
-                      key={bank.id} 
-                      bank={bank} 
-                      onRemove={removeBank} 
-                      onClick={setSelectedBankForHistory}
-                    />
-                  ))
-                )}
+                {banks.map((bank) => (
+                  <BankCard 
+                    key={bank.id} 
+                    bank={bank} 
+                    onRemove={removeBank} 
+                    onClick={setSelectedBankForHistory}
+                  />
+                ))}
               </div>
             </section>
           </div>

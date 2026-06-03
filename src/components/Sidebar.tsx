@@ -11,17 +11,18 @@ import {
   PieChart
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Link, useLocation } from "react-router-dom";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', active: true },
-  { icon: ArrowLeftRight, label: 'Transações', active: false },
-  { icon: Landmark, label: 'Contas', active: false },
-  { icon: CreditCard, label: 'Cartões', active: false },
-  { icon: PieChart, label: 'Relatórios', active: false },
-  { icon: Settings, label: 'Configurações', active: false },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { icon: ArrowLeftRight, label: 'Transações', path: '/transactions' },
+  { icon: Landmark, label: 'Contas', path: '/accounts' },
+  { icon: CreditCard, label: 'Cartões', path: '/cards' },
 ];
 
 const Sidebar = () => {
+  const location = useLocation();
+
   return (
     <aside className="w-64 bg-white border-r border-slate-100 flex flex-col h-screen sticky top-0 hidden md:flex">
       <div className="p-8">
@@ -34,18 +35,19 @@ const Sidebar = () => {
 
         <nav className="space-y-2">
           {menuItems.map((item) => (
-            <button
+            <Link
               key={item.label}
+              to={item.path}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all",
-                item.active 
+                location.pathname === item.path 
                   ? "bg-primary text-white shadow-lg shadow-primary/20" 
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
             >
               <item.icon size={20} />
               {item.label}
-            </button>
+            </Link>
           ))}
         </nav>
       </div>
