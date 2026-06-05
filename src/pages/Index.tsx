@@ -5,6 +5,7 @@ import AddBankDialog from "@/components/AddBankDialog";
 import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
 import TransactionList from "@/components/TransactionList";
 import EditTransactionDialog from "@/components/EditTransactionDialog";
@@ -45,8 +46,9 @@ const Index = () => {
   [filteredTransactions]);
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] dark:bg-slate-950">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
       <Sidebar />
+      <MobileNav />
       
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-12">

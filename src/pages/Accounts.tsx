@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
 import BankCard from "@/components/BankCard";
 import TransactionList from "@/components/TransactionList";
 import MonthNavigator from "@/components/MonthNavigator";
@@ -29,8 +30,9 @@ const AccountsPage = () => {
   }, [transactions, selectedBank, currentDate]);
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] dark:bg-slate-950">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
       <Sidebar />
+      <MobileNav />
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-8">
           {!selectedBank ? (
@@ -50,8 +52,8 @@ const AccountsPage = () => {
             </>
           ) : (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <Button variant="ghost" onClick={() => setSelectedBank(null)} className="gap-2">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <Button variant="ghost" onClick={() => setSelectedBank(null)} className="gap-2 self-start">
                   <ArrowLeft size={18} /> Voltar para Contas
                 </Button>
                 <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
