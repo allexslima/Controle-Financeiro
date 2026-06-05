@@ -6,12 +6,12 @@ import {
   ArrowLeftRight, 
   Landmark, 
   CreditCard, 
-  Settings,
   LogOut,
   PieChart
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
+import ThemeToggle from "./ThemeToggle";
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -24,13 +24,13 @@ const Sidebar = () => {
   const location = useLocation();
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-100 flex flex-col h-screen sticky top-0 hidden md:flex">
+    <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 flex flex-col h-screen sticky top-0 hidden md:flex">
       <div className="p-8">
         <div className="flex items-center gap-3 mb-10">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white">
             <PieChart size={24} />
           </div>
-          <span className="text-xl font-black tracking-tight text-slate-900">Finance.io</span>
+          <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
         </div>
 
         <nav className="space-y-2">
@@ -42,7 +42,7 @@ const Sidebar = () => {
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all",
                 location.pathname === item.path 
                   ? "bg-primary text-white shadow-lg shadow-primary/20" 
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                  : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               <item.icon size={20} />
@@ -52,8 +52,12 @@ const Sidebar = () => {
         </nav>
       </div>
 
-      <div className="mt-auto p-8 border-t border-slate-50">
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-rose-500 hover:bg-rose-50 transition-all">
+      <div className="mt-auto p-8 border-t border-slate-50 dark:border-slate-800 space-y-4">
+        <div className="flex items-center justify-between px-4">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tema</span>
+          <ThemeToggle />
+        </div>
+        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all">
           <LogOut size={20} />
           Sair da conta
         </button>

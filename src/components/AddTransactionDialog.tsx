@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 
@@ -30,6 +31,8 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
   const [bankId, setBankId] = useState("");
   const [destinationBankId, setDestinationBankId] = useState("");
   const [category, setCategory] = useState("");
+  const [installments, setInstallments] = useState("1");
+  const [isRecurring, setIsRecurring] = useState(false);
 
   const filteredBanks = banks.filter(bank => {
     if (method === 'credit') return bank.type === 'credit_card';
@@ -60,6 +63,8 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
       category: category || (method === 'transfer' ? "Transferência" : "Geral"),
       date: new Date().toISOString(),
+      installments: method === 'credit' ? parseInt(installments) : undefined,
+      isRecurring: method === 'credit' ? isRecurring : undefined,
     };
 
     onAdd(newTransaction);
@@ -75,6 +80,8 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
     setDestinationBankId("");
     setCategory("");
     setMethod("debit");
+    setInstallments("1");
+    setIsRecurring(false);
   };
 
   return (
@@ -85,12 +92,12 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
           Nova Transação
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[450px] rounded-[2rem]">
+      <DialogContent className="sm:max-w-[450px] rounded-[2rem] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Nova Movimentação</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl">
+          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
             {[
               { id: 'income', label: 'Receita', icon: ArrowUpCircle, color: 'bg-emerald-600' },
               { id: 'debit', label: 'Débito', icon: Wallet, color: 'bg-blue-600' },
@@ -114,7 +121,7 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
             <Label htmlFor="description">Descrição</Label>
             <Input
               id="description"
-              placeholder="Ex: Aluguel, Pix, Transferência..."
+              placeholder="Ex: Aluguel, Pix, Supermercado..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="rounded-xl"
@@ -122,23 +129,35 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="amount">Valor (R$)</Label>
-            <Input
-              id="amount"
-              type="number"
-              step="0.01"
-              placeholder="0,00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="rounded-xl"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="amount">Valor (R$)</Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                placeholder="0,00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="rounded-xl"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="category">Categoria</Label>
+              <Input
+                id="category"
+                placeholder="Ex: Alimentação"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="rounded-xl"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
-              <Label>Conta/Cartão</Label>
+              <Label>{method === 'credit' ? 'Cartão de Crédito' : 'Conta Bancária'}</Label>
               <Select onValueChange={setBankId} value={bankId} required>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Selecione" />
@@ -166,6 +185,42 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {method === 'credit' && (
+              <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="space-y-2">
+                  <Label htmlFor="installments">Número de Parcelas</Label>
+                  <Input
+                    id="installments"
+                    type="number"
+                    min="1"
+                    max="48"
+                    value={installments}
+                    onChange={(e) => setInstallments(e.target.value)}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                  <Checkbox 
+                    id="recurring" 
+                    checked={isRecurring} 
+                    onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor="recurring"
+                      className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
+                    >
+                      <Repeat size={14} className="text-primary" />
+                      Compra Recorrente
+                    </label>
+                    <p className="text-[10px] text-muted-foreground">
+                      Repetir esta despesa todos os meses.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </div>

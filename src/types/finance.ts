@@ -6,7 +6,7 @@ export interface Bank {
   balance: number;
   color: string;
   type: BankType;
-  closingDay?: number; // Dia de fechamento da fatura (1-31)
+  closingDay?: number;
 }
 
 export type TransactionMethod = 'debit' | 'credit' | 'income' | 'transfer';
@@ -20,4 +20,6 @@ export interface Transaction {
   date: string;
   bankId: string;
   destinationBankId?: string;
+  installments?: number;
+  isRecurring?: boolean;
 }

@@ -6,15 +6,19 @@ import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import Sidebar from "@/components/Sidebar";
 import MonthNavigator from "@/components/MonthNavigator";
+import TransactionList from "@/components/TransactionList";
+import EditTransactionDialog from "@/components/EditTransactionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { isSameMonth, parseISO } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
+import { Transaction } from "@/types/finance";
 
 const Index = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const { banks, transactions, addBank, addTransaction } = useFinance();
+  const { banks, transactions, addBank, addTransaction, deleteTransaction, updateTransaction } = useFinance();
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
@@ -41,7 +45,7 @@ const Index = () => {
   [filteredTransactions]);
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex min-h-screen bg-[#f8fafc] dark:bg-slate-950">
       <Sidebar />
       
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
@@ -53,14 +57,14 @@ const Index = () => {
                 <Sparkles size={12} />
                 <span>Visão Geral do Mês</span>
               </div>
-              <h1 className="text-4xl font-black tracking-tight text-slate-900">Dashboard</h1>
+              <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">Dashboard</h1>
             </div>
 
             <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
 
             <div className="flex flex-wrap items-center justify-center gap-3">
               <AddTransactionDialog banks={banks} onAdd={addTransaction} />
-              <div className="h-8 w-px bg-slate-200 mx-2 hidden sm:block" />
+              <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-2 hidden sm:block" />
               <AddBankDialog onAdd={addBank} />
               <AddCreditCardDialog onAdd={addBank} />
             </div>
@@ -82,24 +86,24 @@ const Index = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-white border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
+            <Card className="bg-white dark:bg-slate-900 border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
               <CardContent className="pt-10 pb-8 px-8">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
+                  <div className="p-2 bg-purple-50 dark:bg-purple-950/30 text-purple-600 rounded-xl">
                     <CreditCard size={20} />
                   </div>
                   <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Faturas Cartões</p>
                 </div>
-                <h3 className="text-3xl font-black text-slate-900">
+                <h3 className="text-3xl font-black text-slate-900 dark:text-white">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCredit)}
                 </h3>
               </CardContent>
             </Card>
 
-            <Card className="bg-white border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
+            <Card className="bg-white dark:bg-slate-900 border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
               <CardContent className="pt-10 pb-8 px-8">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 rounded-xl">
                     <TrendingUp size={20} />
                   </div>
                   <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Receitas Mês</p>
@@ -110,10 +114,10 @@ const Index = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-white border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
+            <Card className="bg-white dark:bg-slate-900 border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
               <CardContent className="pt-10 pb-8 px-8">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-rose-50 text-rose-600 rounded-xl">
+                  <div className="p-2 bg-rose-50 dark:bg-rose-950/30 text-rose-600 rounded-xl">
                     <TrendingDown size={20} />
                   </div>
                   <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Despesas Mês</p>
@@ -124,6 +128,26 @@ const Index = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Transações Recentes */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between px-2">
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white">Transações Recentes</h2>
+            </div>
+            <TransactionList 
+              transactions={filteredTransactions.slice(0, 5)} 
+              banks={banks} 
+              onEdit={setEditingTransaction}
+              onDelete={deleteTransaction}
+            />
+          </div>
+
+          <EditTransactionDialog 
+            transaction={editingTransaction}
+            banks={banks}
+            onUpdate={updateTransaction}
+            onClose={() => setEditingTransaction(null)}
+          />
 
           <div className="pt-10">
             <MadeWithDyad />
