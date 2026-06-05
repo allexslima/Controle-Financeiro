@@ -7,6 +7,8 @@ import BankCard from "@/components/BankCard";
 import TransactionList from "@/components/TransactionList";
 import MonthNavigator from "@/components/MonthNavigator";
 import EditBankDialog from "@/components/EditBankDialog";
+import AddTransactionDialog from "@/components/AddTransactionDialog";
+import AddBankDialog from "@/components/AddBankDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
 import { isSameMonth, parseISO } from "date-fns";
@@ -14,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Pencil } from "lucide-react";
 
 const AccountsPage = () => {
-  const { banks, transactions, removeBank, updateBank, deleteTransaction } = useFinance();
+  const { banks, transactions, removeBank, updateBank, deleteTransaction, addTransaction, addBank } = useFinance();
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
   const [editingBank, setEditingBank] = useState<Bank | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -37,7 +39,13 @@ const AccountsPage = () => {
         <div className="max-w-5xl mx-auto space-y-8">
           {!selectedBank ? (
             <>
-              <h1 className="text-3xl font-black text-slate-900 dark:text-white">Minhas Contas</h1>
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <h1 className="text-3xl font-black text-slate-900 dark:text-white">Minhas Contas</h1>
+                <div className="flex items-center gap-2">
+                  <AddBankDialog onAdd={addBank} variant="discrete" />
+                  <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {accountBanks.map(bank => (
                   <BankCard 
@@ -53,9 +61,15 @@ const AccountsPage = () => {
           ) : (
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                <Button variant="ghost" onClick={() => setSelectedBank(null)} className="gap-2 self-start">
-                  <ArrowLeft size={18} /> Voltar para Contas
-                </Button>
+                <div className="flex items-center gap-4">
+                  <Button variant="ghost" onClick={() => setSelectedBank(null)} className="gap-2 self-start">
+                    <ArrowLeft size={18} /> Voltar
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <AddBankDialog onAdd={addBank} variant="discrete" />
+                    <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                  </div>
+                </div>
                 <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
               </div>
 

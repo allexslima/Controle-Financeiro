@@ -79,7 +79,10 @@ const CardsPage = () => {
                   <Button variant="ghost" onClick={() => setSelectedCard(null)} className="gap-2 self-start">
                     <ArrowLeft size={18} /> Voltar
                   </Button>
-                  <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                  <div className="flex items-center gap-2">
+                    <AddCreditCardDialog onAdd={addBank} variant="discrete" />
+                    <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                  </div>
                 </div>
                 <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
               </div>
