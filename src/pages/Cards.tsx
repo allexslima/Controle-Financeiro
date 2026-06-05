@@ -7,6 +7,8 @@ import BankCard from "@/components/BankCard";
 import TransactionList from "@/components/TransactionList";
 import MonthNavigator from "@/components/MonthNavigator";
 import EditBankDialog from "@/components/EditBankDialog";
+import AddTransactionDialog from "@/components/AddTransactionDialog";
+import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
 import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
@@ -14,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Pencil } from "lucide-react";
 
 const CardsPage = () => {
-  const { banks, transactions, removeBank, updateBank, deleteTransaction } = useFinance();
+  const { banks, transactions, removeBank, updateBank, deleteTransaction, addTransaction, addBank } = useFinance();
   const [selectedCard, setSelectedCard] = useState<Bank | null>(null);
   const [editingBank, setEditingBank] = useState<Bank | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -51,7 +53,13 @@ const CardsPage = () => {
         <div className="max-w-5xl mx-auto space-y-8">
           {!selectedCard ? (
             <>
-              <h1 className="text-3xl font-black text-slate-900 dark:text-white">Meus Cartões</h1>
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <h1 className="text-3xl font-black text-slate-900 dark:text-white">Meus Cartões</h1>
+                <div className="flex items-center gap-2">
+                  <AddCreditCardDialog onAdd={addBank} variant="discrete" />
+                  <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {creditCards.map(card => (
                   <BankCard 
@@ -67,9 +75,12 @@ const CardsPage = () => {
           ) : (
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                <Button variant="ghost" onClick={() => setSelectedCard(null)} className="gap-2 self-start">
-                  <ArrowLeft size={18} /> Voltar para Cartões
-                </Button>
+                <div className="flex items-center gap-4">
+                  <Button variant="ghost" onClick={() => setSelectedCard(null)} className="gap-2 self-start">
+                    <ArrowLeft size={18} /> Voltar
+                  </Button>
+                  <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                </div>
                 <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
               </div>
 

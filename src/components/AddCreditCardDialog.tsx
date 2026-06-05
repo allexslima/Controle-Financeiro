@@ -12,15 +12,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CreditCard, PlusCircle } from "lucide-react";
+import { CreditCard, PlusCircle, Plus } from "lucide-react";
 import { Bank } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
 
 interface AddCreditCardDialogProps {
   onAdd: (bank: Bank) => void;
+  variant?: 'default' | 'discrete';
 }
 
-const AddCreditCardDialog = ({ onAdd }: AddCreditCardDialogProps) => {
+const AddCreditCardDialog = ({ onAdd, variant = 'default' }: AddCreditCardDialogProps) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [balance, setBalance] = useState("");
@@ -51,10 +52,17 @@ const AddCreditCardDialog = ({ onAdd }: AddCreditCardDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2 border-purple-600 text-purple-600 hover:bg-purple-50 rounded-full px-6">
-          <CreditCard className="h-4 w-4" />
-          Novo Cartão
-        </Button>
+        {variant === 'default' ? (
+          <Button variant="outline" className="gap-2 border-purple-600 text-purple-600 hover:bg-purple-50 rounded-full px-6">
+            <CreditCard className="h-4 w-4" />
+            Novo Cartão
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" className="gap-2 rounded-full border-slate-200 text-slate-600 hover:text-primary hover:border-primary transition-all h-9 px-4">
+            <Plus className="h-4 w-4" />
+            <span className="text-xs font-bold">Novo Cartão</span>
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] rounded-2xl">
         <DialogHeader>
