@@ -29,35 +29,35 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
 
   const getMethodBg = (method: string) => {
     switch (method) {
-      case 'income': return 'bg-emerald-100';
-      case 'debit': return 'bg-blue-100';
-      case 'credit': return 'bg-purple-100';
-      case 'transfer': return 'bg-orange-100';
-      default: return 'bg-slate-100';
+      case 'income': return 'bg-emerald-100 dark:bg-emerald-950/30';
+      case 'debit': return 'bg-blue-100 dark:bg-blue-950/30';
+      case 'credit': return 'bg-purple-100 dark:bg-purple-950/30';
+      case 'transfer': return 'bg-orange-100 dark:bg-orange-950/30';
+      default: return 'bg-slate-100 dark:bg-slate-800';
     }
   };
 
   return (
-    <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
-      <div className="p-6 border-b border-slate-100">
-        <h3 className="text-lg font-bold text-slate-800">Transações Recentes</h3>
+    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg overflow-hidden border border-slate-100 dark:border-slate-800">
+      <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Transações Recentes</h3>
       </div>
-      <div className="divide-y divide-slate-50">
+      <div className="divide-y divide-slate-50 dark:divide-slate-800">
         {transactions.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
+          <div className="p-12 text-center text-slate-400 dark:text-slate-500">
             Nenhuma transação registrada ainda.
           </div>
         ) : (
           transactions.map((transaction) => (
-            <div key={transaction.id} className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between group">
+            <div key={transaction.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-between group">
               <div className="flex items-center gap-4">
                 <div className={`p-2 rounded-2xl ${getMethodBg(transaction.method)}`}>
                   {getMethodIcon(transaction.method)}
                 </div>
                 <div>
-                  <p className="font-bold text-slate-800">{transaction.description}</p>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span className="bg-slate-100 px-2 py-0.5 rounded-full capitalize">
+                  <p className="font-bold text-slate-800 dark:text-slate-100">{transaction.description}</p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full capitalize">
                       {transaction.method === 'income' ? 'Receita' : 
                        transaction.method === 'transfer' ? 'Transferência' : 
                        transaction.method}
@@ -81,7 +81,7 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
                      transaction.method === 'transfer' ? '' : '-'} 
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
                   </p>
-                  <p className="text-[10px] text-slate-400 flex items-center justify-end gap-1">
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1">
                     <Calendar size={10} />
                     {format(new Date(transaction.date), "dd 'de' MMM", { locale: ptBR })}
                   </p>
@@ -90,7 +90,7 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 text-slate-400 hover:text-primary"
+                    className="h-8 w-8 text-slate-400 hover:text-primary dark:hover:text-white"
                     onClick={() => onEdit(transaction)}
                   >
                     <Pencil size={14} />
