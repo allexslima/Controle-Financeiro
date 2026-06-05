@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { Bank, Transaction } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
 
@@ -9,6 +9,7 @@ interface FinanceContextType {
   transactions: Transaction[];
   addBank: (bank: Bank) => void;
   removeBank: (id: string) => void;
+  updateBank: (bank: Bank) => void;
   addTransaction: (transaction: Transaction) => void;
   deleteTransaction: (id: string) => void;
   updateTransaction: (transaction: Transaction) => void;
@@ -54,6 +55,11 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(prev => prev.filter(t => t.bankId !== id && t.destinationBankId !== id));
   };
 
+  const updateBank = (updatedBank: Bank) => {
+    setBanks(prev => prev.map(b => b.id === updatedBank.id ? updatedBank : b));
+    showSuccess(`${updatedBank.name} atualizado com sucesso!`);
+  };
+
   const addTransaction = (t: Transaction) => {
     setTransactions(prev => [t, ...prev]);
     applyTransactionToBalance(t);
@@ -79,7 +85,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   return (
     <FinanceContext.Provider value={{ 
-      banks, transactions, addBank, removeBank, addTransaction, deleteTransaction, updateTransaction 
+      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction 
     }}>
       {children}
     </FinanceContext.Provider>

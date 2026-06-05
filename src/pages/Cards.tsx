@@ -5,15 +5,17 @@ import Sidebar from "@/components/Sidebar";
 import BankCard from "@/components/BankCard";
 import TransactionList from "@/components/TransactionList";
 import MonthNavigator from "@/components/MonthNavigator";
+import EditBankDialog from "@/components/EditBankDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
 import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CreditCard } from "lucide-react";
+import { ArrowLeft, CreditCard, Pencil } from "lucide-react";
 
 const CardsPage = () => {
-  const { banks, transactions, removeBank, deleteTransaction } = useFinance();
+  const { banks, transactions, removeBank, updateBank, deleteTransaction } = useFinance();
   const [selectedCard, setSelectedCard] = useState<Bank | null>(null);
+  const [editingBank, setEditingBank] = useState<Bank | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const creditCards = banks.filter(b => b.type === 'credit_card');
@@ -41,19 +43,20 @@ const CardsPage = () => {
   [filteredTransactions, today]);
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex min-h-screen bg-[#f8fafc] dark:bg-slate-950">
       <Sidebar />
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-8">
           {!selectedCard ? (
             <>
-              <h1 className="text-3xl font-black text-slate-900">Meus Cartões</h1>
+              <h1 className="text-3xl font-black text-slate-900 dark:text-white">Meus Cartões</h1>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {creditCards.map(card => (
                   <BankCard 
                     key={card.id} 
                     bank={card} 
                     onRemove={removeBank} 
+                    onEdit={setEditingBank}
                     onClick={setSelectedCard} 
                   />
                 ))}
@@ -68,7 +71,15 @@ const CardsPage = () => {
                 <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
               </div>
 
-              <div className="bg-slate-900 p-8 rounded-[2rem] shadow-xl text-white relative overflow-hidden">
+              <div className="bg-slate-900 p-8 rounded-[2rem] shadow-xl text-white relative overflow-hidden group">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-white/10"
+                  onClick={() => setEditingBank(selectedCard)}
+                >
+                  <Pencil size={18} />
+                </Button>
                 <div className="relative z-10">
                   <div className="flex justify-between items-start">
                     <div>
@@ -85,13 +96,13 @@ const CardsPage = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
                   <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Compras Efetuadas</p>
-                  <p className="text-2xl font-black text-slate-900 mt-2">
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completedTotal)}
                   </p>
                 </div>
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
                   <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Despesas Futuras</p>
                   <p className="text-2xl font-black text-rose-600 mt-2">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(futureTotal)}
@@ -108,6 +119,12 @@ const CardsPage = () => {
             </div>
           )}
         </div>
+
+        <EditBankDialog 
+          bank={editingBank}
+          onUpdate={updateBank}
+          onClose={() => setEditingBank(null)}
+        />
       </main>
     </div>
   );
