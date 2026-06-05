@@ -14,16 +14,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat } from "lucide-react";
+import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat, Calendar as CalendarIcon } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
+import { format } from "date-fns";
 
 interface AddTransactionDialogProps {
   banks: Bank[];
   onAdd: (transaction: Transaction) => void;
+  variant?: 'default' | 'discrete';
 }
 
-const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
+const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransactionDialogProps) => {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -31,6 +33,7 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
   const [bankId, setBankId] = useState("");
   const [destinationBankId, setDestinationBankId] = useState("");
   const [category, setCategory] = useState("");
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [installments, setInstallments] = useState("1");
   const [isRecurring, setIsRecurring] = useState(false);
 
@@ -47,7 +50,7 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !amount || !bankId) return;
+    if (!description || !amount || !bankId || !date) return;
     
     if (method === 'transfer' && (!destinationBankId || bankId === destinationBankId)) {
       showError("Selecione uma conta de destino diferente da origem.");
@@ -62,7 +65,7 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
       bankId,
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
       category: category || (method === 'transfer' ? "Transferência" : "Geral"),
-      date: new Date().toISOString(),
+      date: new Date(date).toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
       isRecurring: method === 'credit' ? isRecurring : undefined,
     };
@@ -80,6 +83,7 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
     setDestinationBankId("");
     setCategory("");
     setMethod("debit");
+    setDate(format(new Date(), "yyyy-MM-dd"));
     setInstallments("1");
     setIsRecurring(false);
   };
@@ -87,10 +91,17 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2 rounded-full px-8 py-6 text-lg font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
-          <PlusCircle className="h-5 w-5" />
-          Nova Transação
-        </Button>
+        {variant === 'default' ? (
+          <Button className="gap-2 rounded-full px-8 py-6 text-lg font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
+            <PlusCircle className="h-5 w-5" />
+            Nova Transação
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" className="gap-2 rounded-full border-slate-200 text-slate-600 hover:text-primary hover:border-primary transition-all h-9 px-4">
+            <PlusCircle className="h-4 w-4" />
+            <span className="text-xs font-bold">Nova Transação</span>
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[450px] rounded-[2rem] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -144,15 +155,27 @@ const AddTransactionDialog = ({ banks, onAdd }: AddTransactionDialogProps) => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="category">Categoria</Label>
+              <Label htmlFor="date">Data</Label>
               <Input
-                id="category"
-                placeholder="Ex: Alimentação"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                id="date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
                 className="rounded-xl"
+                required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">Categoria</Label>
+            <Input
+              id="category"
+              placeholder="Ex: Alimentação"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="rounded-xl"
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-4">

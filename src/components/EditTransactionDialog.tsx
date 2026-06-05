@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
+import { format, parseISO } from "date-fns";
 
 interface EditTransactionDialogProps {
   transaction: Transaction | null;
@@ -30,6 +31,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
   const [bankId, setBankId] = useState("");
   const [destinationBankId, setDestinationBankId] = useState("");
   const [category, setCategory] = useState("");
+  const [date, setDate] = useState("");
 
   useEffect(() => {
     if (transaction) {
@@ -39,6 +41,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       setBankId(transaction.bankId);
       setDestinationBankId(transaction.destinationBankId || "");
       setCategory(transaction.category);
+      setDate(format(parseISO(transaction.date), "yyyy-MM-dd"));
     }
   }, [transaction]);
 
@@ -49,7 +52,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!transaction || !description || !amount || !bankId) return;
+    if (!transaction || !description || !amount || !bankId || !date) return;
     
     if (method === 'transfer' && (!destinationBankId || bankId === destinationBankId)) {
       showError("Selecione uma conta de destino diferente da origem.");
@@ -64,6 +67,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       bankId,
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
       category: category || (method === 'transfer' ? "Transferência" : "Geral"),
+      date: new Date(date).toISOString(),
     };
 
     onUpdate(updatedTransaction);
@@ -84,7 +88,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
           <DialogTitle className="text-2xl font-bold">Editar Transação</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl">
+          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
             {[
               { id: 'income', label: 'Receita', icon: ArrowUpCircle, color: 'bg-emerald-600' },
               { id: 'debit', label: 'Débito', icon: Wallet, color: 'bg-blue-600' },
@@ -115,17 +119,30 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="edit-amount">Valor (R$)</Label>
-            <Input
-              id="edit-amount"
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="rounded-xl"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-amount">Valor (R$)</Label>
+              <Input
+                id="edit-amount"
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="rounded-xl"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-date">Data</Label>
+              <Input
+                id="edit-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="rounded-xl"
+                required
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
