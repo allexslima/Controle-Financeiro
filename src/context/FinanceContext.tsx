@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Bank, Transaction } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
 
@@ -17,14 +17,38 @@ interface FinanceContextType {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-export const FinanceProvider = ({ children }: { children: React.ReactNode }) => {
-  const [banks, setBanks] = useState<Bank[]>([
-    { id: '1', name: 'Nubank', balance: 2500.50, color: '#8a05be', type: 'account' },
-    { id: '2', name: 'Itaú', balance: 12400.00, color: '#ec7000', type: 'account' },
-    { id: '3', name: 'XP Visa', balance: 1200.00, color: '#000000', type: 'credit_card', closingDay: 15 },
-  ]);
+// Chaves para o LocalStorage
+const BANKS_STORAGE_KEY = 'finance_io_banks';
+const TRANSACTIONS_STORAGE_KEY = 'finance_io_transactions';
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+export const FinanceProvider = ({ children }: { children: React.ReactNode }) => {
+  // Inicializa o estado tentando carregar do LocalStorage
+  const [banks, setBanks] = useState<Bank[]>(() => {
+    const savedBanks = localStorage.getItem(BANKS_STORAGE_KEY);
+    if (savedBanks) return JSON.parse(savedBanks);
+    
+    // Dados iniciais caso não haja nada salvo
+    return [
+      { id: '1', name: 'Nubank', balance: 0, color: '#8a05be', type: 'account' },
+      { id: '2', name: 'Itaú', balance: 0, color: '#ec7000', type: 'account' },
+      { id: '3', name: 'XP Visa', balance: 0, color: '#000000', type: 'credit_card', closingDay: 15 },
+    ];
+  });
+
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    const savedTransactions = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
+    return savedTransactions ? JSON.parse(savedTransactions) : [];
+  });
+
+  // Salva no LocalStorage sempre que os bancos mudarem
+  useEffect(() => {
+    localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
+  }, [banks]);
+
+  // Salva no LocalStorage sempre que as transações mudarem
+  useEffect(() => {
+    localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
+  }, [transactions]);
 
   const applyTransactionToBalance = (transaction: Transaction, reverse = false) => {
     setBanks(prevBanks => prevBanks.map(bank => {
