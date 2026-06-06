@@ -155,7 +155,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="date">Data</Label>
+              <Label htmlFor="date">Data da Transação</Label>
               <Input
                 id="date"
                 type="date"
