@@ -1,17 +1,161 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+"use client";
 
+import React, { useState, useMemo } from 'react';
+import AddBankDialog from "@/components/AddBankDialog";
+import AddCreditCardDialog from "@/components/AddCreditCardDialog";
+import AddTransactionDialog from "@/components/AddTransactionDialog";
+import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
+import MonthNavigator from "@/components/MonthNavigator";
+import TransactionList from "@/components/TransactionList";
+import EditTransactionDialog from "@/components/EditTransactionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
+import { TrendingUp, TrendingDown, CreditCard, Wallet, Sparkles } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { isSameMonth, parseISO } from "date-fns";
+import { useFinance } from "@/context/FinanceContext";
+import { Transaction } from "@/types/finance";
 
 const Index = () => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const { banks, transactions, addBank, addTransaction, deleteTransaction, updateTransaction } = useFinance();
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
+  }, [transactions, currentDate]);
+
+  const totalBalance = useMemo(() => 
+    banks.filter(b => b.type === 'account').reduce((acc, bank) => acc + bank.balance, 0), 
+  [banks]);
+
+  const totalCredit = useMemo(() => 
+    banks.filter(b => b.type === 'credit_card').reduce((acc, bank) => acc + bank.balance, 0), 
+  [banks]);
+  
+  const monthlyIncome = useMemo(() => 
+    filteredTransactions
+      .filter(t => t.method === 'income')
+      .reduce((acc, t) => acc + t.amount, 0), 
+  [filteredTransactions]);
+
+  const monthlyExpenses = useMemo(() => 
+    filteredTransactions
+      .filter(t => t.method === 'debit' || t.method === 'credit')
+      .reduce((acc, t) => acc + t.amount, 0), 
+  [filteredTransactions]);
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">
-          Start building your amazing project here!
-        </p>
-      </div>
-      <MadeWithDyad />
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
+      <Sidebar />
+      <MobileNav />
+      
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto">
+        <div className="max-w-5xl mx-auto space-y-12">
+          {/* Header Centralizado */}
+          <header className="flex flex-col items-center text-center space-y-8 py-4">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/5 text-primary text-xs font-bold">
+                <Sparkles size={12} />
+                <span>Visão Geral do Mês</span>
+              </div>
+              <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">Dashboard</h1>
+            </div>
+
+            <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
+
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <AddTransactionDialog banks={banks} onAdd={addTransaction} />
+              <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-2 hidden sm:block" />
+              <AddBankDialog onAdd={addBank} />
+              <AddCreditCardDialog onAdd={addBank} />
+            </div>
+          </header>
+
+          {/* Cards de Resumo */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="bg-primary text-primary-foreground border-none shadow-2xl shadow-primary/20 rounded-[2.5rem] overflow-hidden transition-transform hover:scale-[1.02]">
+              <CardContent className="pt-10 pb-8 px-8">
+                <div className="flex items-center gap-3 mb-6 opacity-70">
+                  <div className="p-2 bg-white/10 rounded-xl">
+                    <Wallet size={20} />
+                  </div>
+                  <p className="font-bold text-[10px] uppercase tracking-widest">Saldo em Contas</p>
+                </div>
+                <h2 className="text-3xl font-black">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBalance)}
+                </h2>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white dark:bg-slate-900 border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
+              <CardContent className="pt-10 pb-8 px-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-purple-50 dark:bg-purple-950/30 text-purple-600 rounded-xl">
+                    <CreditCard size={20} />
+                  </div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Faturas Cartões</p>
+                </div>
+                <h3 className="text-3xl font-black text-slate-900 dark:text-white">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCredit)}
+                </h3>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white dark:bg-slate-900 border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
+              <CardContent className="pt-10 pb-8 px-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 rounded-xl">
+                    <TrendingUp size={20} />
+                  </div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Receitas Mês</p>
+                </div>
+                <h3 className="text-3xl font-black text-emerald-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyIncome)}
+                </h3>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white dark:bg-slate-900 border-none shadow-sm rounded-[2.5rem] transition-transform hover:scale-[1.02]">
+              <CardContent className="pt-10 pb-8 px-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-rose-50 dark:bg-rose-950/30 text-rose-600 rounded-xl">
+                    <TrendingDown size={20} />
+                  </div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Despesas Mês</p>
+                </div>
+                <h3 className="text-3xl font-black text-rose-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyExpenses)}
+                </h3>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Transações Recentes */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between px-2">
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white">Transações Recentes</h2>
+            </div>
+            <TransactionList 
+              transactions={filteredTransactions.slice(0, 5)} 
+              banks={banks} 
+              onEdit={setEditingTransaction}
+              onDelete={deleteTransaction}
+            />
+          </div>
+
+          <EditTransactionDialog 
+            transaction={editingTransaction}
+            banks={banks}
+            onUpdate={updateTransaction}
+            onClose={() => setEditingTransaction(null)}
+          />
+
+          <div className="pt-10">
+            <MadeWithDyad />
+          </div>
+        </div>
+      </main>
     </div>
   );
 };
