@@ -3,6 +3,7 @@
 import React from 'react';
 import Layout from '@/components/Layout';
 import StatCard from '@/components/Dashboard/StatCard';
+import NewTransactionDialog from '@/components/Transactions/NewTransactionDialog';
 import { 
   Wallet, 
   ArrowUpCircle, 
@@ -29,10 +30,7 @@ const Index = () => {
             <Button variant="outline" className="rounded-xl border-gray-200">
               Exportar Relatório
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 rounded-xl gap-2">
-              <Plus className="w-4 h-4" />
-              Nova Transação
-            </Button>
+            <NewTransactionDialog />
           </div>
         </div>
 
