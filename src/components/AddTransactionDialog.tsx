@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat, Calendar as CalendarIcon } from "lucide-react";
+import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format } from "date-fns";
@@ -67,7 +67,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
       category: category || (method === 'transfer' ? "Transferência" : "Geral"),
       date: new Date(date).toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
-      isRecurring: method === 'credit' ? isRecurring : undefined,
+      isRecurring: isRecurring,
     };
 
     onAdd(newTransaction);
@@ -211,8 +211,8 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
               </div>
             )}
 
-            {method === 'credit' && (
-              <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+              {method === 'credit' && (
                 <div className="space-y-2">
                   <Label htmlFor="installments">Número de Parcelas</Label>
                   <Input
@@ -225,27 +225,27 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
                     className="rounded-xl"
                   />
                 </div>
-                <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
-                  <Checkbox 
-                    id="recurring" 
-                    checked={isRecurring} 
-                    onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <label
-                      htmlFor="recurring"
-                      className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
-                    >
-                      <Repeat size={14} className="text-primary" />
-                      Compra Recorrente
-                    </label>
-                    <p className="text-[10px] text-muted-foreground">
-                      Repetir esta despesa todos os meses.
-                    </p>
-                  </div>
+              )}
+              <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                <Checkbox 
+                  id="recurring" 
+                  checked={isRecurring} 
+                  onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <label
+                    htmlFor="recurring"
+                    className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
+                  >
+                    <Repeat size={14} className="text-primary" />
+                    Transação Recorrente
+                  </label>
+                  <p className="text-[10px] text-muted-foreground">
+                    Repetir esta movimentação todos os meses.
+                  </p>
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
           <DialogFooter className="pt-4">

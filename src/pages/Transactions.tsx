@@ -6,13 +6,14 @@ import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
 import TransactionList from "@/components/TransactionList";
 import EditTransactionDialog from "@/components/EditTransactionDialog";
+import AddTransactionDialog from "@/components/AddTransactionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
 import { Transaction } from "@/types/finance";
 
 const TransactionsPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const { transactions, banks, deleteTransaction, updateTransaction } = useFinance();
+  const { transactions, banks, deleteTransaction, updateTransaction, addTransaction } = useFinance();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const filteredTransactions = useMemo(() => {
@@ -42,7 +43,10 @@ const TransactionsPage = () => {
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-8">
           <header className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <h1 className="text-3xl font-black text-slate-900 dark:text-white">Todas as Transações</h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-black text-slate-900 dark:text-white">Todas as Transações</h1>
+              <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+            </div>
             <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
           </header>
 

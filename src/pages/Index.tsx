@@ -12,7 +12,7 @@ import EditTransactionDialog from "@/components/EditTransactionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { isSameMonth, parseISO } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
 import { Transaction } from "@/types/finance";
 
@@ -24,6 +24,8 @@ const Index = () => {
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
   }, [transactions, currentDate]);
+
+  const today = startOfDay(new Date());
 
   const totalBalance = useMemo(() => 
     banks.filter(b => b.type === 'account').reduce((acc, bank) => acc + bank.balance, 0), 
@@ -45,6 +47,20 @@ const Index = () => {
       .reduce((acc, t) => acc + t.amount, 0), 
   [filteredTransactions]);
 
+  const completedTotal = useMemo(() => 
+    filteredTransactions
+      .filter(t => !isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
+  [filteredTransactions, today]);
+
+  const futureTotal = useMemo(() => 
+    filteredTransactions
+      .filter(t => isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
+  [filteredTransactions, today]);
+
+  const grandTotal = completedTotal + futureTotal;
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
       <Sidebar />
@@ -52,7 +68,6 @@ const Index = () => {
       
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-12">
-          {/* Header Centralizado */}
           <header className="flex flex-col items-center text-center space-y-8 py-4">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/5 text-primary text-xs font-bold">
@@ -72,7 +87,6 @@ const Index = () => {
             </div>
           </header>
 
-          {/* Cards de Resumo */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="bg-primary text-primary-foreground border-none shadow-2xl shadow-primary/20 rounded-[2.5rem] overflow-hidden transition-transform hover:scale-[1.02]">
               <CardContent className="pt-10 pb-8 px-8">
@@ -131,7 +145,6 @@ const Index = () => {
             </Card>
           </div>
 
-          {/* Transações Recentes */}
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
               <h2 className="text-2xl font-black text-slate-900 dark:text-white">Transações Recentes</h2>
@@ -142,6 +155,27 @@ const Index = () => {
               onEdit={setEditingTransaction}
               onDelete={deleteTransaction}
             />
+
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
+              <div className="flex justify-between text-sm font-medium text-slate-500">
+                <span>Valores Efetuados (Mês)</span>
+                <span className={completedTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completedTotal)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-medium text-slate-500">
+                <span>Valores Futuros (Mês)</span>
+                <span className={futureTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(futureTotal)}
+                </span>
+              </div>
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <span className="text-lg font-black text-slate-900 dark:text-white">Total do Mês</span>
+                <span className={`text-2xl font-black ${grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
+                </span>
+              </div>
+            </div>
           </div>
 
           <EditTransactionDialog 
