@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreditCard, Landmark, Calendar as CalendarIcon } from "lucide-react";
+import { CreditCard } from "lucide-react";
 import { Bank, Transaction } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format } from "date-fns";
@@ -26,7 +26,8 @@ interface PayInvoiceDialogProps {
 
 const PayInvoiceDialog = ({ card, banks, onPay }: PayInvoiceDialogProps) => {
   const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState(card.balance.toString());
+  // Limitando a 2 casas decimais no valor inicial
+  const [amount, setAmount] = useState(card.balance.toFixed(2));
   const [sourceBankId, setSourceBankId] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
@@ -34,6 +35,7 @@ const PayInvoiceDialog = ({ card, banks, onPay }: PayInvoiceDialogProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const payAmount = parseFloat(amount);
     if (!amount || !sourceBankId || !date) {
       showError("Preencha todos os campos.");
       return;
@@ -42,7 +44,7 @@ const PayInvoiceDialog = ({ card, banks, onPay }: PayInvoiceDialogProps) => {
     const paymentTransaction: Transaction = {
       id: Math.random().toString(36).substr(2, 9),
       description: `Pagamento Fatura: ${card.name}`,
-      amount: parseFloat(amount),
+      amount: payAmount,
       method: 'transfer',
       bankId: sourceBankId,
       destinationBankId: card.id,
@@ -51,7 +53,7 @@ const PayInvoiceDialog = ({ card, banks, onPay }: PayInvoiceDialogProps) => {
     };
 
     onPay(paymentTransaction);
-    showSuccess(`Pagamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(amount))} registrado!`);
+    showSuccess(`Pagamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payAmount)} registrado!`);
     setOpen(false);
   };
 
@@ -87,7 +89,7 @@ const PayInvoiceDialog = ({ card, banks, onPay }: PayInvoiceDialogProps) => {
                 variant="ghost" 
                 size="sm" 
                 className="absolute right-1 top-1 h-8 text-[10px] font-bold text-primary"
-                onClick={() => setAmount(card.balance.toString())}
+                onClick={() => setAmount(card.balance.toFixed(2))}
               >
                 TOTAL
               </Button>

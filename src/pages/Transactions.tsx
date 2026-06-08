@@ -17,22 +17,44 @@ const TransactionsPage = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
-  }, [transactions, currentDate]);
+    const monthTransactions = transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
+    
+    const creditCards = banks.filter(b => b.type === 'credit_card');
+    const nonCreditTransactions = monthTransactions.filter(t => t.method !== 'credit');
+    
+    const aggregatedCredit = creditCards.map(card => {
+      const cardPurchases = monthTransactions.filter(t => t.method === 'credit' && t.bankId === card.id);
+      const total = cardPurchases.reduce((acc, t) => acc + t.amount, 0);
+      
+      if (total === 0) return null;
+      
+      return {
+        id: `invoice-${card.id}-${currentDate.getTime()}`,
+        description: `Fatura: ${card.name}`,
+        amount: total,
+        method: 'credit' as const,
+        bankId: card.id,
+        category: 'Fatura',
+        date: currentDate.toISOString(),
+      } as Transaction;
+    }).filter(Boolean) as Transaction[];
+
+    return [...nonCreditTransactions, ...aggregatedCredit];
+  }, [transactions, currentDate, banks]);
 
   const today = startOfDay(new Date());
 
   const completedTotal = useMemo(() => 
-    filteredTransactions
-      .filter(t => !isAfter(parseISO(t.date), today))
+    transactions
+      .filter(t => isSameMonth(parseISO(t.date), currentDate) && !isAfter(parseISO(t.date), today))
       .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
-  [filteredTransactions, today]);
+  [transactions, currentDate, today]);
 
   const futureTotal = useMemo(() => 
-    filteredTransactions
-      .filter(t => isAfter(parseISO(t.date), today))
+    transactions
+      .filter(t => isSameMonth(parseISO(t.date), currentDate) && isAfter(parseISO(t.date), today))
       .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
-  [filteredTransactions, today]);
+  [transactions, currentDate, today]);
 
   const grandTotal = completedTotal + futureTotal;
 

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Bank, Transaction } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
+import { addMonths, parseISO } from "date-fns";
 
 interface FinanceContextType {
   banks: Bank[];
@@ -49,25 +50,20 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setBanks(prevBanks => prevBanks.map(bank => {
       const multiplier = reverse ? -1 : 1;
       
-      // Lógica para a conta de ORIGEM
       if (bank.id === transaction.bankId) {
         let newBalance = bank.balance;
         if (transaction.method === 'income') {
           newBalance += (transaction.amount * multiplier);
         } else if (transaction.method === 'credit') {
-          // No cartão de crédito, o "saldo" é o limite utilizado. Compras AUMENTAM o uso.
           newBalance += (transaction.amount * multiplier);
         } else {
-          // Débito ou Transferência (saída)
           newBalance -= (transaction.amount * multiplier);
         }
         return { ...bank, balance: newBalance };
       }
       
-      // Lógica para a conta de DESTINO (apenas transferências)
       if (transaction.method === 'transfer' && bank.id === transaction.destinationBankId) {
         if (bank.type === 'credit_card') {
-          // Se o destino for um cartão, estamos pagando a fatura. Isso DIMINUI o limite utilizado.
           return { ...bank, balance: bank.balance - (transaction.amount * multiplier) };
         }
         return { ...bank, balance: bank.balance + (transaction.amount * multiplier) };
@@ -86,12 +82,29 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   const updateBank = (updatedBank: Bank) => {
     setBanks(prev => prev.map(b => b.id === updatedBank.id ? updatedBank : b));
-    showSuccess(`${updatedBank.name} atualizado com sucesso!`);
   };
 
   const addTransaction = (t: Transaction) => {
-    setTransactions(prev => [t, ...prev]);
-    applyTransactionToBalance(t);
+    const newTransactions: Transaction[] = [];
+    const count = t.installments || (t.isRecurring ? 12 : 1);
+    const baseDate = parseISO(t.date);
+
+    for (let i = 0; i < count; i++) {
+      const installmentDate = addMonths(baseDate, i);
+      const installmentTransaction: Transaction = {
+        ...t,
+        id: i === 0 ? t.id : Math.random().toString(36).substr(2, 9),
+        description: count > 1 && t.installments ? `${t.description} (${i + 1}/${count})` : t.description,
+        date: installmentDate.toISOString(),
+      };
+      newTransactions.push(installmentTransaction);
+      // Apenas a primeira parcela (ou transação atual) afeta o saldo imediato se for débito/receita
+      // No caso de crédito, todas as parcelas tecnicamente ocupam o limite, mas aqui vamos simplificar
+      // aplicando o saldo conforme a data chega ou mantendo o controle de fatura.
+      applyTransactionToBalance(installmentTransaction);
+    }
+
+    setTransactions(prev => [...newTransactions, ...prev]);
   };
 
   const deleteTransaction = (id: string) => {
