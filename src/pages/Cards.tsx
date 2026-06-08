@@ -13,7 +13,7 @@ import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import PayInvoiceDialog from "@/components/PayInvoiceDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
-import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, isBefore, endOfDay } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Pencil } from "lucide-react";
 
@@ -34,21 +34,21 @@ const CardsPage = () => {
     );
   }, [transactions, selectedCard, currentDate]);
 
-  const today = startOfDay(new Date());
+  const today = endOfDay(new Date());
 
-  const completedTotal = useMemo(() => 
+  // Fatura até o momento (compras feitas até hoje no mês selecionado)
+  const invoiceUntilToday = useMemo(() => 
     filteredTransactions
       .filter(t => !isAfter(parseISO(t.date), today) && t.method === 'credit')
       .reduce((acc, t) => acc + t.amount, 0),
   [filteredTransactions, today]);
 
-  const futureTotal = useMemo(() => 
+  // Fatura até o fechamento (todas as compras do mês selecionado)
+  const invoiceUntilClosing = useMemo(() => 
     filteredTransactions
-      .filter(t => isAfter(parseISO(t.date), today) && t.method === 'credit')
+      .filter(t => t.method === 'credit')
       .reduce((acc, t) => acc + t.amount, 0),
-  [filteredTransactions, today]);
-
-  const totalInvoiceUntilClosing = completedTotal + futureTotal;
+  [filteredTransactions]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -111,15 +111,15 @@ const CardsPage = () => {
                   
                   <div className="mt-8 flex flex-col md:flex-row md:items-end gap-8">
                     <div>
-                      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Fatura Atual</p>
+                      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Fatura até o momento</p>
                       <p className="text-4xl font-black">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedCard.balance)}
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilToday)}
                       </p>
                     </div>
                     <div className="pb-1">
                       <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Fatura até o Fechamento</p>
                       <p className="text-xl font-black text-rose-400">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalInvoiceUntilClosing)}
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilClosing)}
                       </p>
                     </div>
                   </div>
@@ -135,13 +135,13 @@ const CardsPage = () => {
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
                   <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Compras Efetuadas (Mês)</p>
                   <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completedTotal)}
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilToday)}
                   </p>
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
                   <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Despesas Futuras (Mês)</p>
                   <p className="text-2xl font-black text-rose-600 mt-2">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(futureTotal)}
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilClosing - invoiceUntilToday)}
                   </p>
                 </div>
               </div>

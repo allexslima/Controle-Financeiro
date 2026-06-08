@@ -18,6 +18,7 @@ import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat }
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface AddTransactionDialogProps {
   banks: Bank[];
@@ -36,6 +37,9 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [installments, setInstallments] = useState("1");
   const [isRecurring, setIsRecurring] = useState(false);
+  
+  // Estado para controle de erros de validação
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   const filteredBanks = banks.filter(bank => {
     if (method === 'credit') return bank.type === 'credit_card';
@@ -50,10 +54,23 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !amount || !bankId || !date) return;
     
-    if (method === 'transfer' && (!destinationBankId || bankId === destinationBankId)) {
+    const newErrors: Record<string, boolean> = {};
+    if (!description) newErrors.description = true;
+    if (!amount) newErrors.amount = true;
+    if (!bankId) newErrors.bankId = true;
+    if (!date) newErrors.date = true;
+    if (method === 'transfer' && !destinationBankId) newErrors.destinationBankId = true;
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      showError("Por favor, preencha todos os campos obrigatórios destacados.");
+      return;
+    }
+    
+    if (method === 'transfer' && bankId === destinationBankId) {
       showError("Selecione uma conta de destino diferente da origem.");
+      setErrors({ bankId: true, destinationBankId: true });
       return;
     }
 
@@ -86,10 +103,11 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     setDate(format(new Date(), "yyyy-MM-dd"));
     setInstallments("1");
     setIsRecurring(false);
+    setErrors({});
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(val) => { setOpen(val); if(!val) resetForm(); }}>
       <DialogTrigger asChild>
         {variant === 'default' ? (
           <Button className="gap-2 rounded-full px-8 py-6 text-lg font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
@@ -120,7 +138,10 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
                 type="button"
                 variant={method === item.id ? 'default' : 'ghost'}
                 className={`rounded-lg flex-col py-6 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
-                onClick={() => setMethod(item.id as TransactionMethod)}
+                onClick={() => {
+                  setMethod(item.id as TransactionMethod);
+                  setErrors(prev => ({ ...prev, bankId: false, destinationBankId: false }));
+                }}
               >
                 <item.icon className="h-4 w-4" />
                 <span className="text-[9px]">{item.label}</span>
@@ -129,40 +150,46 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Descrição</Label>
+            <Label htmlFor="description" className={cn(errors.description && "text-destructive")}>Descrição *</Label>
             <Input
               id="description"
               placeholder="Ex: Aluguel, Pix, Supermercado..."
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="rounded-xl"
-              required
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (errors.description) setErrors(prev => ({ ...prev, description: false }));
+              }}
+              className={cn("rounded-xl", errors.description && "border-destructive ring-destructive")}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="amount">Valor (R$)</Label>
+              <Label htmlFor="amount" className={cn(errors.amount && "text-destructive")}>Valor (R$) *</Label>
               <Input
                 id="amount"
                 type="number"
                 step="0.01"
                 placeholder="0,00"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="rounded-xl"
-                required
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                  if (errors.amount) setErrors(prev => ({ ...prev, amount: false }));
+                }}
+                className={cn("rounded-xl", errors.amount && "border-destructive ring-destructive")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="date">Data da Transação</Label>
+              <Label htmlFor="date" className={cn(errors.date && "text-destructive")}>Data *</Label>
               <Input
                 id="date"
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="rounded-xl"
-                required
+                onChange={(e) => {
+                  setDate(e.target.value);
+                  if (errors.date) setErrors(prev => ({ ...prev, date: false }));
+                }}
+                className={cn("rounded-xl", errors.date && "border-destructive ring-destructive")}
               />
             </div>
           </div>
@@ -180,9 +207,17 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
 
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
-              <Label>{method === 'credit' ? 'Cartão de Crédito' : 'Conta Bancária'}</Label>
-              <Select onValueChange={setBankId} value={bankId} required>
-                <SelectTrigger className="rounded-xl">
+              <Label className={cn(errors.bankId && "text-destructive")}>
+                {method === 'credit' ? 'Cartão de Crédito *' : 'Conta Bancária *'}
+              </Label>
+              <Select 
+                onValueChange={(val) => {
+                  setBankId(val);
+                  if (errors.bankId) setErrors(prev => ({ ...prev, bankId: false }));
+                }} 
+                value={bankId}
+              >
+                <SelectTrigger className={cn("rounded-xl", errors.bankId && "border-destructive ring-destructive")}>
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
@@ -195,9 +230,15 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
 
             {method === 'transfer' && (
               <div className="space-y-2">
-                <Label>Conta de Destino</Label>
-                <Select onValueChange={setDestinationBankId} value={destinationBankId} required>
-                  <SelectTrigger className="rounded-xl border-orange-200 bg-orange-50/30">
+                <Label className={cn(errors.destinationBankId && "text-destructive")}>Conta de Destino *</Label>
+                <Select 
+                  onValueChange={(val) => {
+                    setDestinationBankId(val);
+                    if (errors.destinationBankId) setErrors(prev => ({ ...prev, destinationBankId: false }));
+                  }} 
+                  value={destinationBankId}
+                >
+                  <SelectTrigger className={cn("rounded-xl border-orange-200 bg-orange-50/30", errors.destinationBankId && "border-destructive ring-destructive")}>
                     <SelectValue placeholder="Selecione o destino" />
                   </SelectTrigger>
                   <SelectContent>

@@ -12,7 +12,7 @@ import AddTransactionDialog from "@/components/AddTransactionDialog";
 import AddBankDialog from "@/components/AddBankDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
-import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, endOfMonth, isBefore, endOfDay } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Pencil } from "lucide-react";
 
@@ -33,7 +33,61 @@ const AccountsPage = () => {
     );
   }, [transactions, selectedBank, currentDate]);
 
-  const today = startOfDay(new Date());
+  const today = endOfDay(new Date());
+  const endOfSelectedMonth = endOfMonth(currentDate);
+
+  // Valor atual até o momento (Saldo real considerando apenas transações até hoje)
+  const balanceUntilToday = useMemo(() => {
+    if (!selectedBank) return 0;
+    
+    // O bank.balance no contexto é o saldo FINAL de todos os tempos.
+    // Para pegar o saldo "até hoje", subtraímos todas as transações futuras ao dia de hoje.
+    const futureTransactions = transactions.filter(t => 
+      (t.bankId === selectedBank.id || t.destinationBankId === selectedBank.id) &&
+      isAfter(parseISO(t.date), today)
+    );
+
+    const futureImpact = futureTransactions.reduce((acc, t) => {
+      const isOrigin = t.bankId === selectedBank.id;
+      const isDest = t.destinationBankId === selectedBank.id;
+      
+      if (t.method === 'income') return acc + t.amount;
+      if (t.method === 'transfer') {
+        if (isOrigin && !isDest) return acc - t.amount;
+        if (!isOrigin && isDest) return acc + t.amount;
+        return acc;
+      }
+      return acc - t.amount;
+    }, 0);
+
+    return selectedBank.balance - futureImpact;
+  }, [selectedBank, transactions, today]);
+
+  // Previsão até o final do mês selecionado
+  const balanceUntilEndOfMonth = useMemo(() => {
+    if (!selectedBank) return 0;
+    
+    // Subtraímos as transações que ocorrem APÓS o final do mês selecionado do saldo total.
+    const afterMonthTransactions = transactions.filter(t => 
+      (t.bankId === selectedBank.id || t.destinationBankId === selectedBank.id) &&
+      isAfter(parseISO(t.date), endOfSelectedMonth)
+    );
+
+    const afterMonthImpact = afterMonthTransactions.reduce((acc, t) => {
+      const isOrigin = t.bankId === selectedBank.id;
+      const isDest = t.destinationBankId === selectedBank.id;
+      
+      if (t.method === 'income') return acc + t.amount;
+      if (t.method === 'transfer') {
+        if (isOrigin && !isDest) return acc - t.amount;
+        if (!isOrigin && isDest) return acc + t.amount;
+        return acc;
+      }
+      return acc - t.amount;
+    }, 0);
+
+    return selectedBank.balance - afterMonthImpact;
+  }, [selectedBank, transactions, endOfSelectedMonth]);
 
   const completedTotal = useMemo(() => 
     filteredTransactions
@@ -54,8 +108,6 @@ const AccountsPage = () => {
         return acc - t.amount;
       }, 0),
   [filteredTransactions, today, selectedBank]);
-
-  const finalMonthBalance = (selectedBank?.balance || 0) + futureTotal;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -108,15 +160,15 @@ const AccountsPage = () => {
                 <h2 className="text-2xl font-black text-slate-900 dark:text-white">{selectedBank.name}</h2>
                 <div className="mt-4 flex flex-col md:flex-row md:items-end gap-6">
                   <div>
-                    <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Saldo Atual</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Valor atual até o momento</p>
                     <p className="text-4xl font-black text-slate-900 dark:text-white">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedBank.balance)}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balanceUntilToday)}
                     </p>
                   </div>
                   <div className="pb-1">
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Previsão Final do Mês</p>
-                    <p className={`text-xl font-black ${finalMonthBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(finalMonthBalance)}
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Previsão até o final do mês</p>
+                    <p className={`text-xl font-black ${balanceUntilEndOfMonth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(balanceUntilEndOfMonth)}
                     </p>
                   </div>
                 </div>
