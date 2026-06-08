@@ -12,7 +12,7 @@ import EditTransactionDialog from "@/components/EditTransactionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, endOfMonth } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
 import { Transaction } from "@/types/finance";
 
@@ -22,65 +22,63 @@ const Index = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   
   const filteredTransactions = useMemo(() => {
-    const monthTransactions = transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
-    
-    // Agrupar transações de crédito por cartão
-    const creditCards = banks.filter(b => b.type === 'credit_card');
-    const nonCreditTransactions = monthTransactions.filter(t => t.method !== 'credit');
-    
-    const aggregatedCredit = creditCards.map(card => {
-      const cardPurchases = monthTransactions.filter(t => t.method === 'credit' && t.bankId === card.id);
-      const total = cardPurchases.reduce((acc, t) => acc + t.amount, 0);
-      
-      if (total === 0) return null;
-      
-      return {
-        id: `invoice-${card.id}-${currentDate.getTime()}`,
-        description: `Fatura: ${card.name}`,
-        amount: total,
-        method: 'credit' as const,
-        bankId: card.id,
-        category: 'Fatura',
-        date: currentDate.toISOString(),
-      } as Transaction;
-    }).filter(Boolean) as Transaction[];
-
-    return [...nonCreditTransactions, ...aggregatedCredit];
-  }, [transactions, currentDate, banks]);
+    return transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
+  }, [transactions, currentDate]);
 
   const today = startOfDay(new Date());
+  const endOfSelectedMonth = endOfMonth(currentDate);
 
-  const totalBalance = useMemo(() => 
-    banks.filter(b => b.type === 'account').reduce((acc, bank) => acc + bank.balance, 0), 
-  [banks]);
+  // Saldo projetado ao final do mês selecionado
+  const projectedBalance = useMemo(() => {
+    const accounts = banks.filter(b => b.type === 'account');
+    const currentTotal = accounts.reduce((acc, bank) => acc + bank.balance, 0);
+    
+    // Como o bank.balance já inclui TODAS as transações (inclusive as de meses muito distantes),
+    // precisamos subtrair as transações que ocorrem APÓS o final do mês selecionado.
+    const futureTransactions = transactions.filter(t => isAfter(parseISO(t.date), endOfSelectedMonth));
+    
+    const futureImpact = futureTransactions.reduce((acc, t) => {
+      if (t.method === 'income') return acc + t.amount;
+      if (t.method === 'transfer') {
+        const isFromAccount = accounts.some(a => a.id === t.bankId);
+        const isToAccount = accounts.some(a => a.id === t.destinationBankId);
+        if (isFromAccount && !isToAccount) return acc - t.amount;
+        if (!isFromAccount && isToAccount) return acc + t.amount;
+        return acc;
+      }
+      return acc - t.amount;
+    }, 0);
+
+    return currentTotal - futureImpact;
+  }, [banks, transactions, endOfSelectedMonth]);
 
   const totalCredit = useMemo(() => 
     banks.filter(b => b.type === 'credit_card').reduce((acc, bank) => acc + bank.balance, 0), 
   [banks]);
   
   const monthlyIncome = useMemo(() => 
-    transactions
-      .filter(t => isSameMonth(parseISO(t.date), currentDate) && t.method === 'income')
+    filteredTransactions
+      .filter(t => t.method === 'income')
       .reduce((acc, t) => acc + t.amount, 0), 
-  [transactions, currentDate]);
+  [filteredTransactions]);
 
   const monthlyExpenses = useMemo(() => 
-    transactions
-      .filter(t => isSameMonth(parseISO(t.date), currentDate) && (t.method === 'debit' || t.method === 'credit'))
+    filteredTransactions
+      .filter(t => t.method === 'debit' || t.method === 'credit')
       .reduce((acc, t) => acc + t.amount, 0), 
-  [transactions, currentDate]);
+  [filteredTransactions]);
 
   const completedTotal = useMemo(() => 
-    transactions
-      .filter(t => isSameMonth(parseISO(t.date), currentDate) && !isAfter(parseISO(t.date), today))
+    filteredTransactions
+      .filter(t => !isAfter(parseISO(t.date), today))
       .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
-  [transactions, currentDate, today]);
+  [filteredTransactions, today]);
 
   const futureTotal = useMemo(() => 
-    transactions
-      .filter(t => isSameMonth(parseISO(t.date), currentDate) && isAfter(parseISO(t.date), today))
+    filteredTransactions
+      .filter(t => isAfter(parseISO(t.date), today))
       .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
-  [transactions, currentDate, today]);
+  [filteredTransactions, today]);
 
   const grandTotal = completedTotal + futureTotal;
 
@@ -117,10 +115,10 @@ const Index = () => {
                   <div className="p-2 bg-white/10 rounded-xl">
                     <Wallet size={20} />
                   </div>
-                  <p className="font-bold text-[10px] uppercase tracking-widest">Saldo em Contas</p>
+                  <p className="font-bold text-[10px] uppercase tracking-widest">Saldo Final do Mês</p>
                 </div>
                 <h2 className="text-3xl font-black">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBalance)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectedBalance)}
                 </h2>
               </CardContent>
             </Card>

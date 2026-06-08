@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Bank, Transaction } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
-import { addMonths, parseISO } from "date-fns";
+import { addMonths, parseISO, startOfMonth, endOfMonth, isAfter } from "date-fns";
 
 interface FinanceContextType {
   banks: Bank[];
@@ -29,7 +29,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     return [
       { id: '1', name: 'Nubank', balance: 0, color: '#8a05be', type: 'account' },
       { id: '2', name: 'Itaú', balance: 0, color: '#ec7000', type: 'account' },
-      { id: '3', name: 'XP Visa', balance: 0, color: '#000000', type: 'credit_card', closingDay: 15 },
+      { id: '3', name: 'XP Visa', balance: 0, color: '#000000', type: 'credit_card', closingDay: 15, dueDay: 22 },
     ];
   });
 
@@ -87,7 +87,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   const addTransaction = (t: Transaction) => {
     const newTransactions: Transaction[] = [];
     const count = t.installments || (t.isRecurring ? 12 : 1);
-    const baseDate = parseISO(t.date);
+    const baseDate = typeof t.date === 'string' ? parseISO(t.date) : new Date(t.date);
 
     for (let i = 0; i < count; i++) {
       const installmentDate = addMonths(baseDate, i);
@@ -98,9 +98,6 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         date: installmentDate.toISOString(),
       };
       newTransactions.push(installmentTransaction);
-      // Apenas a primeira parcela (ou transação atual) afeta o saldo imediato se for débito/receita
-      // No caso de crédito, todas as parcelas tecnicamente ocupam o limite, mas aqui vamos simplificar
-      // aplicando o saldo conforme a data chega ou mantendo o controle de fatura.
       applyTransactionToBalance(installmentTransaction);
     }
 
