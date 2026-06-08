@@ -9,6 +9,7 @@ import MonthNavigator from "@/components/MonthNavigator";
 import EditBankDialog from "@/components/EditBankDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import AddCreditCardDialog from "@/components/AddCreditCardDialog";
+import PayInvoiceDialog from "@/components/PayInvoiceDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
 import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
@@ -26,7 +27,7 @@ const CardsPage = () => {
   const filteredTransactions = useMemo(() => {
     if (!selectedCard) return [];
     return transactions.filter(t => 
-      t.bankId === selectedCard.id &&
+      (t.bankId === selectedCard.id || t.destinationBankId === selectedCard.id) &&
       isSameMonth(parseISO(t.date), currentDate)
     );
   }, [transactions, selectedCard, currentDate]);
@@ -62,13 +63,15 @@ const CardsPage = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {creditCards.map(card => (
-                  <BankCard 
-                    key={card.id} 
-                    bank={card} 
-                    onRemove={removeBank} 
-                    onEdit={setEditingBank}
-                    onClick={setSelectedCard} 
-                  />
+                  <div key={card.id} className="flex flex-col">
+                    <BankCard 
+                      bank={card} 
+                      onRemove={removeBank} 
+                      onEdit={setEditingBank}
+                      onClick={setSelectedCard} 
+                    />
+                    <PayInvoiceDialog card={card} banks={banks} onPay={addTransaction} />
+                  </div>
                 ))}
               </div>
             </>
@@ -107,6 +110,9 @@ const CardsPage = () => {
                   <p className="text-4xl font-black mt-8">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedCard.balance)}
                   </p>
+                  <div className="mt-6 max-w-[200px]">
+                    <PayInvoiceDialog card={selectedCard} banks={banks} onPay={addTransaction} />
+                  </div>
                 </div>
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16" />
               </div>

@@ -17,17 +17,14 @@ interface FinanceContextType {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-// Chaves para o LocalStorage
 const BANKS_STORAGE_KEY = 'finance_io_banks';
 const TRANSACTIONS_STORAGE_KEY = 'finance_io_transactions';
 
 export const FinanceProvider = ({ children }: { children: React.ReactNode }) => {
-  // Inicializa o estado tentando carregar do LocalStorage
   const [banks, setBanks] = useState<Bank[]>(() => {
     const savedBanks = localStorage.getItem(BANKS_STORAGE_KEY);
     if (savedBanks) return JSON.parse(savedBanks);
     
-    // Dados iniciais caso não haja nada salvo
     return [
       { id: '1', name: 'Nubank', balance: 0, color: '#8a05be', type: 'account' },
       { id: '2', name: 'Itaú', balance: 0, color: '#ec7000', type: 'account' },
@@ -40,12 +37,10 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     return savedTransactions ? JSON.parse(savedTransactions) : [];
   });
 
-  // Salva no LocalStorage sempre que os bancos mudarem
   useEffect(() => {
     localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
   }, [banks]);
 
-  // Salva no LocalStorage sempre que as transações mudarem
   useEffect(() => {
     localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
   }, [transactions]);
@@ -54,17 +49,27 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setBanks(prevBanks => prevBanks.map(bank => {
       const multiplier = reverse ? -1 : 1;
       
+      // Lógica para a conta de ORIGEM
       if (bank.id === transaction.bankId) {
         let newBalance = bank.balance;
         if (transaction.method === 'income') {
           newBalance += (transaction.amount * multiplier);
+        } else if (transaction.method === 'credit') {
+          // No cartão de crédito, o "saldo" é o limite utilizado. Compras AUMENTAM o uso.
+          newBalance += (transaction.amount * multiplier);
         } else {
+          // Débito ou Transferência (saída)
           newBalance -= (transaction.amount * multiplier);
         }
         return { ...bank, balance: newBalance };
       }
       
+      // Lógica para a conta de DESTINO (apenas transferências)
       if (transaction.method === 'transfer' && bank.id === transaction.destinationBankId) {
+        if (bank.type === 'credit_card') {
+          // Se o destino for um cartão, estamos pagando a fatura. Isso DIMINUI o limite utilizado.
+          return { ...bank, balance: bank.balance - (transaction.amount * multiplier) };
+        }
         return { ...bank, balance: bank.balance + (transaction.amount * multiplier) };
       }
       
