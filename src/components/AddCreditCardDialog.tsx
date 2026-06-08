@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CreditCard, PlusCircle, Plus } from "lucide-react";
+import { CreditCard, Plus } from "lucide-react";
 import { Bank } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
 
@@ -26,11 +26,12 @@ const AddCreditCardDialog = ({ onAdd, variant = 'default' }: AddCreditCardDialog
   const [name, setName] = useState("");
   const [balance, setBalance] = useState("");
   const [closingDay, setClosingDay] = useState("");
+  const [dueDay, setDueDay] = useState("");
   const [color, setColor] = useState("#8a05be");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !balance || !closingDay) return;
+    if (!name || !balance || !closingDay || !dueDay) return;
 
     const newCard: Bank = {
       id: Math.random().toString(36).substr(2, 9),
@@ -39,6 +40,7 @@ const AddCreditCardDialog = ({ onAdd, variant = 'default' }: AddCreditCardDialog
       color,
       type: 'credit_card',
       closingDay: parseInt(closingDay),
+      dueDay: parseInt(dueDay),
     };
 
     onAdd(newCard);
@@ -46,6 +48,7 @@ const AddCreditCardDialog = ({ onAdd, variant = 'default' }: AddCreditCardDialog
     setName("");
     setBalance("");
     setClosingDay("");
+    setDueDay("");
     setOpen(false);
   };
 
@@ -96,19 +99,35 @@ const AddCreditCardDialog = ({ onAdd, variant = 'default' }: AddCreditCardDialog
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="closingDay">Dia de Fechamento da Fatura</Label>
-            <Input
-              id="closingDay"
-              type="number"
-              min="1"
-              max="31"
-              placeholder="Ex: 10"
-              value={closingDay}
-              onChange={(e) => setClosingDay(e.target.value)}
-              className="rounded-xl"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="closingDay">Dia Fechamento</Label>
+              <Input
+                id="closingDay"
+                type="number"
+                min="1"
+                max="31"
+                placeholder="Ex: 10"
+                value={closingDay}
+                onChange={(e) => setClosingDay(e.target.value)}
+                className="rounded-xl"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dueDay">Dia Vencimento</Label>
+              <Input
+                id="dueDay"
+                type="number"
+                min="1"
+                max="31"
+                placeholder="Ex: 17"
+                value={dueDay}
+                onChange={(e) => setDueDay(e.target.value)}
+                className="rounded-xl"
+                required
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

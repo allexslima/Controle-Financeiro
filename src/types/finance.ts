@@ -7,6 +7,7 @@ export interface Bank {
   color: string;
   type: BankType;
   closingDay?: number;
+  dueDay?: number;
 }
 
 export type TransactionMethod = 'debit' | 'credit' | 'income' | 'transfer';

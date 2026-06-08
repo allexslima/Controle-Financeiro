@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format, parseISO } from "date-fns";
@@ -32,6 +33,11 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
   const [destinationBankId, setDestinationBankId] = useState("");
   const [category, setCategory] = useState("");
   const [date, setDate] = useState("");
+  const [installments, setInstallments] = useState("1");
+  const [isRecurring, setIsRecurring] = useState(false);
+
+  // Sugestões de categorias baseadas em transações existentes
+  const categorySuggestions = Array.from(new Set(banks.flatMap(() => []).concat(["Alimentação", "Lazer", "Saúde", "Transporte", "Educação", "Moradia"])));
 
   useEffect(() => {
     if (transaction) {
@@ -42,6 +48,8 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       setDestinationBankId(transaction.destinationBankId || "");
       setCategory(transaction.category);
       setDate(format(parseISO(transaction.date), "yyyy-MM-dd"));
+      setInstallments(transaction.installments?.toString() || "1");
+      setIsRecurring(transaction.isRecurring || false);
     }
   }, [transaction]);
 
@@ -68,6 +76,8 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
       category: category || (method === 'transfer' ? "Transferência" : "Geral"),
       date: new Date(date).toISOString(),
+      installments: method === 'credit' ? parseInt(installments) : undefined,
+      isRecurring: isRecurring,
     };
 
     onUpdate(updatedTransaction);
@@ -75,15 +85,9 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
     onClose();
   };
 
-  const getBankLabel = () => {
-    if (method === 'credit') return "Cartão de Crédito";
-    if (method === 'transfer') return "Conta de Origem";
-    return "Conta Bancária";
-  };
-
   return (
     <Dialog open={!!transaction} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[450px] rounded-2xl">
+      <DialogContent className="sm:max-w-[450px] rounded-[2rem] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Editar Transação</DialogTitle>
         </DialogHeader>
@@ -146,7 +150,32 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
           </div>
 
           <div className="space-y-2">
-            <Label>{getBankLabel()}</Label>
+            <Label htmlFor="edit-category">Categoria</Label>
+            <div className="space-y-2">
+              <Input
+                id="edit-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="rounded-xl"
+                placeholder="Ex: Alimentação"
+              />
+              <div className="flex flex-wrap gap-2">
+                {categorySuggestions.slice(0, 4).map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategory(cat)}
+                    className="text-[10px] px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-primary hover:text-white transition-colors"
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>{method === 'credit' ? 'Cartão de Crédito' : 'Conta Bancária'}</Label>
             <Select onValueChange={setBankId} value={bankId} required>
               <SelectTrigger className="rounded-xl">
                 <SelectValue placeholder="Selecione" />
@@ -176,6 +205,39 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
               </Select>
             </div>
           )}
+
+          <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {method === 'credit' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-installments">Número de Parcelas</Label>
+                <Input
+                  id="edit-installments"
+                  type="number"
+                  min="1"
+                  max="48"
+                  value={installments}
+                  onChange={(e) => setInstallments(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            )}
+            <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+              <Checkbox 
+                id="edit-recurring" 
+                checked={isRecurring} 
+                onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="edit-recurring"
+                  className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
+                >
+                  <Repeat size={14} className="text-primary" />
+                  Transação Recorrente
+                </label>
+              </div>
+            </div>
+          </div>
 
           <DialogFooter className="pt-4">
             <Button type="submit" className="w-full rounded-xl py-6 text-lg">Salvar Alterações</Button>
