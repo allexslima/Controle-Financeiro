@@ -7,6 +7,7 @@ import MonthNavigator from "@/components/MonthNavigator";
 import TransactionList from "@/components/TransactionList";
 import EditTransactionDialog from "@/components/EditTransactionDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
+import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { isSameMonth, parseISO, isAfter, startOfDay, getDate, addMonths } from "date-fns";
 import { Transaction } from "@/types/finance";
@@ -15,6 +16,14 @@ const TransactionsPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const { transactions, banks, deleteTransaction, updateTransaction, addTransaction } = useFinance();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  
+  // Estados para o diálogo de recorrência
+  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'edit' | 'delete',
+    transaction: Transaction,
+    updatedData?: Transaction
+  } | null>(null);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
@@ -26,7 +35,6 @@ const TransactionsPage = () => {
       const bank = banks.find(b => b.id === t.bankId);
       if (!bank || !bank.closingDay) return isSameMonth(tDate, currentDate);
 
-      // Lógica de fechamento: se dia > fechamento, pertence ao mês seguinte
       let billingMonth = tDate;
       if (getDate(tDate) > bank.closingDay) {
         billingMonth = addMonths(tDate, 1);
@@ -36,6 +44,40 @@ const TransactionsPage = () => {
   }, [transactions, currentDate, banks]);
 
   const today = startOfDay(new Date());
+
+  const handleEditRequest = (t: Transaction) => {
+    setEditingTransaction(t);
+  };
+
+  const handleUpdate = (updated: Transaction) => {
+    if (updated.groupId) {
+      setPendingAction({ type: 'edit', transaction: updated, updatedData: updated });
+      setRecurringDialogOpen(true);
+    } else {
+      updateTransaction(updated);
+    }
+  };
+
+  const handleDeleteRequest = (id: string) => {
+    const t = transactions.find(item => item.id === id);
+    if (t?.groupId) {
+      setPendingAction({ type: 'delete', transaction: t });
+      setRecurringDialogOpen(true);
+    } else {
+      deleteTransaction(id);
+    }
+  };
+
+  const handleRecurringAction = (mode: 'single' | 'future' | 'all') => {
+    if (!pendingAction) return;
+
+    if (pendingAction.type === 'delete') {
+      deleteTransaction(pendingAction.transaction.id, mode);
+    } else if (pendingAction.type === 'edit' && pendingAction.updatedData) {
+      updateTransaction(pendingAction.updatedData, mode as 'single' | 'future');
+    }
+    setPendingAction(null);
+  };
 
   const completedTotal = useMemo(() => 
     filteredTransactions
@@ -68,8 +110,8 @@ const TransactionsPage = () => {
           <TransactionList 
             transactions={filteredTransactions} 
             banks={banks} 
-            onEdit={setEditingTransaction}
-            onDelete={deleteTransaction}
+            onEdit={handleEditRequest}
+            onDelete={handleDeleteRequest}
           />
 
           <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
@@ -97,8 +139,19 @@ const TransactionsPage = () => {
         <EditTransactionDialog 
           transaction={editingTransaction}
           banks={banks}
-          onUpdate={updateTransaction}
+          onUpdate={handleUpdate}
           onClose={() => setEditingTransaction(null)}
+        />
+
+        <RecurringActionDialog 
+          open={recurringDialogOpen}
+          onOpenChange={setRecurringDialogOpen}
+          title={pendingAction?.type === 'edit' ? "Editar Transação Recorrente" : "Excluir Transação Recorrente"}
+          description={pendingAction?.type === 'edit' 
+            ? "Esta transação faz parte de um grupo. Como deseja aplicar as alterações?" 
+            : "Esta transação faz parte de um grupo. Como deseja realizar a exclusão?"}
+          type={pendingAction?.type || 'edit'}
+          onAction={handleRecurringAction}
         />
       </main>
     </div>

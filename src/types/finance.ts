@@ -23,4 +23,5 @@ export interface Transaction {
   destinationBankId?: string;
   installments?: number;
   isRecurring?: boolean;
+  groupId?: string; // Identificador para transações vinculadas
 }

@@ -9,6 +9,7 @@ import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
 import TransactionList from "@/components/TransactionList";
 import EditTransactionDialog from "@/components/EditTransactionDialog";
+import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +22,14 @@ const Index = () => {
   const { banks, transactions, addBank, addTransaction, deleteTransaction, updateTransaction } = useFinance();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   
+  // Estados para o diálogo de recorrência
+  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'edit' | 'delete',
+    transaction: Transaction,
+    updatedData?: Transaction
+  } | null>(null);
+
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       const tDate = parseISO(t.date);
@@ -41,6 +50,40 @@ const Index = () => {
 
   const today = startOfDay(new Date());
   const endOfSelectedMonth = endOfMonth(currentDate);
+
+  const handleEditRequest = (t: Transaction) => {
+    setEditingTransaction(t);
+  };
+
+  const handleUpdate = (updated: Transaction) => {
+    if (updated.groupId) {
+      setPendingAction({ type: 'edit', transaction: updated, updatedData: updated });
+      setRecurringDialogOpen(true);
+    } else {
+      updateTransaction(updated);
+    }
+  };
+
+  const handleDeleteRequest = (id: string) => {
+    const t = transactions.find(item => item.id === id);
+    if (t?.groupId) {
+      setPendingAction({ type: 'delete', transaction: t });
+      setRecurringDialogOpen(true);
+    } else {
+      deleteTransaction(id);
+    }
+  };
+
+  const handleRecurringAction = (mode: 'single' | 'future' | 'all') => {
+    if (!pendingAction) return;
+
+    if (pendingAction.type === 'delete') {
+      deleteTransaction(pendingAction.transaction.id, mode);
+    } else if (pendingAction.type === 'edit' && pendingAction.updatedData) {
+      updateTransaction(pendingAction.updatedData, mode as 'single' | 'future');
+    }
+    setPendingAction(null);
+  };
 
   const projectedBalance = useMemo(() => {
     const accounts = banks.filter(b => b.type === 'account');
@@ -186,8 +229,8 @@ const Index = () => {
             <TransactionList 
               transactions={filteredTransactions.slice(0, 10)} 
               banks={banks} 
-              onEdit={setEditingTransaction}
-              onDelete={deleteTransaction}
+              onEdit={handleEditRequest}
+              onDelete={handleDeleteRequest}
             />
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
@@ -215,8 +258,19 @@ const Index = () => {
           <EditTransactionDialog 
             transaction={editingTransaction}
             banks={banks}
-            onUpdate={updateTransaction}
+            onUpdate={handleUpdate}
             onClose={() => setEditingTransaction(null)}
+          />
+
+          <RecurringActionDialog 
+            open={recurringDialogOpen}
+            onOpenChange={setRecurringDialogOpen}
+            title={pendingAction?.type === 'edit' ? "Editar Transação Recorrente" : "Excluir Transação Recorrente"}
+            description={pendingAction?.type === 'edit' 
+              ? "Esta transação faz parte de um grupo. Como deseja aplicar as alterações?" 
+              : "Esta transação faz parte de um grupo. Como deseja realizar a exclusão?"}
+            type={pendingAction?.type || 'edit'}
+            onAction={handleRecurringAction}
           />
 
           <div className="pt-10">

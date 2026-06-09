@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Bank, Transaction } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
-import { addMonths, parseISO, startOfMonth, endOfMonth, isAfter } from "date-fns";
+import { addMonths, parseISO, isAfter, isSameDay } from "date-fns";
 
 interface FinanceContextType {
   banks: Bank[];
@@ -12,8 +12,8 @@ interface FinanceContextType {
   removeBank: (id: string) => void;
   updateBank: (bank: Bank) => void;
   addTransaction: (transaction: Transaction) => void;
-  deleteTransaction: (id: string) => void;
-  updateTransaction: (transaction: Transaction) => void;
+  deleteTransaction: (id: string, mode?: 'single' | 'future' | 'all') => void;
+  updateTransaction: (transaction: Transaction, mode?: 'single' | 'future') => void;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -88,12 +88,14 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     const newTransactions: Transaction[] = [];
     const count = t.installments || (t.isRecurring ? 12 : 1);
     const baseDate = typeof t.date === 'string' ? parseISO(t.date) : new Date(t.date);
+    const groupId = (t.installments || t.isRecurring) ? Math.random().toString(36).substr(2, 9) : undefined;
 
     for (let i = 0; i < count; i++) {
       const installmentDate = addMonths(baseDate, i);
       const installmentTransaction: Transaction = {
         ...t,
-        id: i === 0 ? t.id : Math.random().toString(36).substr(2, 9),
+        id: Math.random().toString(36).substr(2, 9),
+        groupId,
         description: count > 1 && t.installments ? `${t.description} (${i + 1}/${count})` : t.description,
         date: installmentDate.toISOString(),
       };
@@ -104,22 +106,66 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(prev => [...newTransactions, ...prev]);
   };
 
-  const deleteTransaction = (id: string) => {
-    const t = transactions.find(item => item.id === id);
-    if (t) {
-      applyTransactionToBalance(t, true);
-      setTransactions(prev => prev.filter(item => item.id !== id));
-      showSuccess("Transação excluída!");
+  const deleteTransaction = (id: string, mode: 'single' | 'future' | 'all' = 'single') => {
+    const target = transactions.find(t => t.id === id);
+    if (!target) return;
+
+    let toDelete: Transaction[] = [];
+
+    if (mode === 'single' || !target.groupId) {
+      toDelete = [target];
+    } else if (mode === 'future') {
+      toDelete = transactions.filter(t => 
+        t.groupId === target.groupId && 
+        (isAfter(parseISO(t.date), parseISO(target.date)) || isSameDay(parseISO(t.date), parseISO(target.date)))
+      );
+    } else if (mode === 'all') {
+      toDelete = transactions.filter(t => t.groupId === target.groupId);
     }
+
+    toDelete.forEach(t => applyTransactionToBalance(t, true));
+    const idsToDelete = toDelete.map(t => t.id);
+    setTransactions(prev => prev.filter(t => !idsToDelete.includes(t.id)));
+    showSuccess(toDelete.length > 1 ? "Transações excluídas!" : "Transação excluída!");
   };
 
-  const updateTransaction = (updated: Transaction) => {
-    const old = transactions.find(t => t.id === updated.id);
-    if (old) {
-      applyTransactionToBalance(old, true);
+  const updateTransaction = (updated: Transaction, mode: 'single' | 'future' = 'single') => {
+    const original = transactions.find(t => t.id === updated.id);
+    if (!original) return;
+
+    if (mode === 'single' || !original.groupId) {
+      applyTransactionToBalance(original, true);
       applyTransactionToBalance(updated);
       setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
+    } else {
+      // Modo 'future': atualiza esta e todas as próximas do mesmo grupo
+      const related = transactions.filter(t => 
+        t.groupId === original.groupId && 
+        (isAfter(parseISO(t.date), parseISO(original.date)) || isSameDay(parseISO(t.date), parseISO(original.date)))
+      );
+
+      const updatedTransactions = transactions.map(t => {
+        const isRelated = related.find(r => r.id === t.id);
+        if (isRelated) {
+          applyTransactionToBalance(t, true);
+          const newT = { 
+            ...t, 
+            description: updated.description, 
+            amount: updated.amount,
+            category: updated.category,
+            bankId: updated.bankId,
+            destinationBankId: updated.destinationBankId,
+            method: updated.method
+          };
+          applyTransactionToBalance(newT);
+          return newT;
+        }
+        return t;
+      });
+
+      setTransactions(updatedTransactions);
     }
+    showSuccess("Transação atualizada!");
   };
 
   return (
