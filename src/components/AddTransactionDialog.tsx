@@ -38,7 +38,6 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const [installments, setInstallments] = useState("1");
   const [isRecurring, setIsRecurring] = useState(false);
   
-  // Estado para controle de erros de validação
   const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   const filteredBanks = banks.filter(bank => {
@@ -64,13 +63,12 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      showError("Por favor, preencha todos os campos obrigatórios destacados.");
+      showError("Por favor, preencha todos os campos obrigatórios.");
       return;
     }
     
     if (method === 'transfer' && bankId === destinationBankId) {
       showError("Selecione uma conta de destino diferente da origem.");
-      setErrors({ bankId: true, destinationBankId: true });
       return;
     }
 
@@ -115,9 +113,8 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
             Nova Transação
           </Button>
         ) : (
-          <Button variant="outline" size="sm" className="gap-2 rounded-full border-slate-200 text-slate-600 hover:text-primary hover:border-primary transition-all h-9 px-4">
-            <PlusCircle className="h-4 w-4" />
-            <span className="text-xs font-bold">Nova Transação</span>
+          <Button className="h-14 w-14 rounded-full shadow-xl shadow-primary/40 flex items-center justify-center p-0 bg-primary text-white hover:scale-110 transition-transform">
+            <PlusCircle className="h-8 w-8" />
           </Button>
         )}
       </DialogTrigger>
@@ -138,10 +135,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
                 type="button"
                 variant={method === item.id ? 'default' : 'ghost'}
                 className={`rounded-lg flex-col py-6 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
-                onClick={() => {
-                  setMethod(item.id as TransactionMethod);
-                  setErrors(prev => ({ ...prev, bankId: false, destinationBankId: false }));
-                }}
+                onClick={() => setMethod(item.id as TransactionMethod)}
               >
                 <item.icon className="h-4 w-4" />
                 <span className="text-[9px]">{item.label}</span>
@@ -150,46 +144,37 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description" className={cn(errors.description && "text-destructive")}>Descrição *</Label>
+            <Label htmlFor="description">Descrição *</Label>
             <Input
               id="description"
               placeholder="Ex: Aluguel, Pix, Supermercado..."
               value={description}
-              onChange={(e) => {
-                setDescription(e.target.value);
-                if (errors.description) setErrors(prev => ({ ...prev, description: false }));
-              }}
-              className={cn("rounded-xl", errors.description && "border-destructive ring-destructive")}
+              onChange={(e) => setDescription(e.target.value)}
+              className={cn("rounded-xl", errors.description && "border-destructive")}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="amount" className={cn(errors.amount && "text-destructive")}>Valor (R$) *</Label>
+              <Label htmlFor="amount">Valor (R$) *</Label>
               <Input
                 id="amount"
                 type="number"
                 step="0.01"
                 placeholder="0,00"
                 value={amount}
-                onChange={(e) => {
-                  setAmount(e.target.value);
-                  if (errors.amount) setErrors(prev => ({ ...prev, amount: false }));
-                }}
-                className={cn("rounded-xl", errors.amount && "border-destructive ring-destructive")}
+                onChange={(e) => setAmount(e.target.value)}
+                className={cn("rounded-xl", errors.amount && "border-destructive")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="date" className={cn(errors.date && "text-destructive")}>Data *</Label>
+              <Label htmlFor="date">Data *</Label>
               <Input
                 id="date"
                 type="date"
                 value={date}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  if (errors.date) setErrors(prev => ({ ...prev, date: false }));
-                }}
-                className={cn("rounded-xl", errors.date && "border-destructive ring-destructive")}
+                onChange={(e) => setDate(e.target.value)}
+                className={cn("rounded-xl", errors.date && "border-destructive")}
               />
             </div>
           </div>
@@ -205,86 +190,67 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          <div className="space-y-2">
+            <Label>{method === 'credit' ? 'Cartão de Crédito *' : 'Conta Bancária *'}</Label>
+            <Select onValueChange={setBankId} value={bankId}>
+              <SelectTrigger className={cn("rounded-xl", errors.bankId && "border-destructive")}>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredBanks.map((bank) => (
+                  <SelectItem key={bank.id} value={bank.id}>{bank.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {method === 'transfer' && (
             <div className="space-y-2">
-              <Label className={cn(errors.bankId && "text-destructive")}>
-                {method === 'credit' ? 'Cartão de Crédito *' : 'Conta Bancária *'}
-              </Label>
-              <Select 
-                onValueChange={(val) => {
-                  setBankId(val);
-                  if (errors.bankId) setErrors(prev => ({ ...prev, bankId: false }));
-                }} 
-                value={bankId}
-              >
-                <SelectTrigger className={cn("rounded-xl", errors.bankId && "border-destructive ring-destructive")}>
-                  <SelectValue placeholder="Selecione" />
+              <Label>Conta de Destino *</Label>
+              <Select onValueChange={setDestinationBankId} value={destinationBankId}>
+                <SelectTrigger className={cn("rounded-xl border-orange-200 bg-orange-50/30", errors.destinationBankId && "border-destructive")}>
+                  <SelectValue placeholder="Selecione o destino" />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredBanks.map((bank) => (
-                    <SelectItem key={bank.id} value={bank.id}>{bank.name}</SelectItem>
+                  {banks.filter(b => b.type === 'account').map((bank) => (
+                    <SelectItem key={bank.id} value={bank.id} disabled={bank.id === bankId}>
+                      {bank.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+          )}
 
-            {method === 'transfer' && (
+          <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {method === 'credit' && (
               <div className="space-y-2">
-                <Label className={cn(errors.destinationBankId && "text-destructive")}>Conta de Destino *</Label>
-                <Select 
-                  onValueChange={(val) => {
-                    setDestinationBankId(val);
-                    if (errors.destinationBankId) setErrors(prev => ({ ...prev, destinationBankId: false }));
-                  }} 
-                  value={destinationBankId}
-                >
-                  <SelectTrigger className={cn("rounded-xl border-orange-200 bg-orange-50/30", errors.destinationBankId && "border-destructive ring-destructive")}>
-                    <SelectValue placeholder="Selecione o destino" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {banks.filter(b => b.type === 'account').map((bank) => (
-                      <SelectItem key={bank.id} value={bank.id} disabled={bank.id === bankId}>
-                        {bank.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="installments">Número de Parcelas</Label>
+                <Input
+                  id="installments"
+                  type="number"
+                  min="1"
+                  max="48"
+                  value={installments}
+                  onChange={(e) => setInstallments(e.target.value)}
+                  className="rounded-xl"
+                />
               </div>
             )}
-
-            <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-              {method === 'credit' && (
-                <div className="space-y-2">
-                  <Label htmlFor="installments">Número de Parcelas</Label>
-                  <Input
-                    id="installments"
-                    type="number"
-                    min="1"
-                    max="48"
-                    value={installments}
-                    onChange={(e) => setInstallments(e.target.value)}
-                    className="rounded-xl"
-                  />
-                </div>
-              )}
-              <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
-                <Checkbox 
-                  id="recurring" 
-                  checked={isRecurring} 
-                  onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <label
-                    htmlFor="recurring"
-                    className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
-                  >
-                    <Repeat size={14} className="text-primary" />
-                    Transação Recorrente
-                  </label>
-                  <p className="text-[10px] text-muted-foreground">
-                    Repetir esta movimentação todos os meses.
-                  </p>
-                </div>
+            <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+              <Checkbox 
+                id="recurring" 
+                checked={isRecurring} 
+                onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="recurring"
+                  className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
+                >
+                  <Repeat size={14} className="text-primary" />
+                  Transação Recorrente
+                </label>
               </div>
             </div>
           </div>
