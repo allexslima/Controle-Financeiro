@@ -13,7 +13,7 @@ import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import PayInvoiceDialog from "@/components/PayInvoiceDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
-import { isSameMonth, parseISO, isAfter, startOfDay, isBefore, endOfDay } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, isBefore, endOfDay, getDate, addMonths, subMonths } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Pencil } from "lucide-react";
 
@@ -26,24 +26,37 @@ const CardsPage = () => {
 
   const creditCards = banks.filter(b => b.type === 'credit_card');
 
+  // Lógica centralizada para determinar a qual fatura (mês) uma transação pertence
+  const getBillingMonth = (transaction: Transaction, bank: Bank | undefined) => {
+    const tDate = parseISO(transaction.date);
+    if (!bank || !bank.closingDay) return tDate;
+
+    // Se o dia da compra for maior que o dia de fechamento, pertence à fatura do mês seguinte
+    if (getDate(tDate) > bank.closingDay) {
+      return addMonths(tDate, 1);
+    }
+    return tDate;
+  };
+
   const filteredTransactions = useMemo(() => {
     if (!selectedCard) return [];
-    return transactions.filter(t => 
-      (t.bankId === selectedCard.id || t.destinationBankId === selectedCard.id) &&
-      isSameMonth(parseISO(t.date), currentDate)
-    );
+    return transactions.filter(t => {
+      if (t.bankId !== selectedCard.id && t.destinationBankId !== selectedCard.id) return false;
+      const billingMonth = getBillingMonth(t, selectedCard);
+      return isSameMonth(billingMonth, currentDate);
+    });
   }, [transactions, selectedCard, currentDate]);
 
   const today = endOfDay(new Date());
 
-  // Fatura até o momento (compras feitas até hoje no mês selecionado)
+  // Fatura até o momento (compras da fatura atual feitas até hoje)
   const invoiceUntilToday = useMemo(() => 
     filteredTransactions
       .filter(t => !isAfter(parseISO(t.date), today) && t.method === 'credit')
       .reduce((acc, t) => acc + t.amount, 0),
   [filteredTransactions, today]);
 
-  // Fatura até o fechamento (todas as compras do mês selecionado)
+  // Fatura até o fechamento (todas as compras que pertencem a esta fatura)
   const invoiceUntilClosing = useMemo(() => 
     filteredTransactions
       .filter(t => t.method === 'credit')

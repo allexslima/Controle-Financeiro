@@ -50,7 +50,11 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
           </div>
         ) : (
           transactions.map((transaction) => (
-            <SwipeableTransactionItem key={transaction.id} onDelete={() => onDelete(transaction.id)}>
+            <SwipeableTransactionItem 
+              key={transaction.id} 
+              onDelete={() => onDelete(transaction.id)}
+              onEdit={() => onEdit(transaction)}
+            >
               <div className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-between group">
                 <div className="flex items-center gap-4">
                   <div className={`p-2 rounded-2xl ${getMethodBg(transaction.method)}`}>

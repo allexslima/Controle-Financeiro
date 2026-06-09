@@ -8,7 +8,7 @@ import TransactionList from "@/components/TransactionList";
 import EditTransactionDialog from "@/components/EditTransactionDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import { useFinance } from "@/context/FinanceContext";
-import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, getDate, addMonths } from "date-fns";
 import { Transaction } from "@/types/finance";
 
 const TransactionsPage = () => {
@@ -17,44 +17,37 @@ const TransactionsPage = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const filteredTransactions = useMemo(() => {
-    const monthTransactions = transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
-    
-    const creditCards = banks.filter(b => b.type === 'credit_card');
-    const nonCreditTransactions = monthTransactions.filter(t => t.method !== 'credit');
-    
-    const aggregatedCredit = creditCards.map(card => {
-      const cardPurchases = monthTransactions.filter(t => t.method === 'credit' && t.bankId === card.id);
-      const total = cardPurchases.reduce((acc, t) => acc + t.amount, 0);
+    return transactions.filter(t => {
+      const tDate = parseISO(t.date);
+      if (t.method !== 'credit') {
+        return isSameMonth(tDate, currentDate);
+      }
       
-      if (total === 0) return null;
-      
-      return {
-        id: `invoice-${card.id}-${currentDate.getTime()}`,
-        description: `Fatura: ${card.name}`,
-        amount: total,
-        method: 'credit' as const,
-        bankId: card.id,
-        category: 'Fatura',
-        date: currentDate.toISOString(),
-      } as Transaction;
-    }).filter(Boolean) as Transaction[];
+      const bank = banks.find(b => b.id === t.bankId);
+      if (!bank || !bank.closingDay) return isSameMonth(tDate, currentDate);
 
-    return [...nonCreditTransactions, ...aggregatedCredit];
+      // Lógica de fechamento: se dia > fechamento, pertence ao mês seguinte
+      let billingMonth = tDate;
+      if (getDate(tDate) > bank.closingDay) {
+        billingMonth = addMonths(tDate, 1);
+      }
+      return isSameMonth(billingMonth, currentDate);
+    });
   }, [transactions, currentDate, banks]);
 
   const today = startOfDay(new Date());
 
   const completedTotal = useMemo(() => 
-    transactions
-      .filter(t => isSameMonth(parseISO(t.date), currentDate) && !isAfter(parseISO(t.date), today))
+    filteredTransactions
+      .filter(t => !isAfter(parseISO(t.date), today))
       .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
-  [transactions, currentDate, today]);
+  [filteredTransactions, today]);
 
   const futureTotal = useMemo(() => 
-    transactions
-      .filter(t => isSameMonth(parseISO(t.date), currentDate) && isAfter(parseISO(t.date), today))
+    filteredTransactions
+      .filter(t => isAfter(parseISO(t.date), today))
       .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
-  [transactions, currentDate, today]);
+  [filteredTransactions, today]);
 
   const grandTotal = completedTotal + futureTotal;
 

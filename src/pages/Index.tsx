@@ -12,7 +12,7 @@ import EditTransactionDialog from "@/components/EditTransactionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { isSameMonth, parseISO, isAfter, startOfDay, endOfMonth } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, endOfMonth, getDate, addMonths } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
 import { Transaction } from "@/types/finance";
 
@@ -22,19 +22,30 @@ const Index = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => isSameMonth(parseISO(t.date), currentDate));
-  }, [transactions, currentDate]);
+    return transactions.filter(t => {
+      const tDate = parseISO(t.date);
+      if (t.method !== 'credit') {
+        return isSameMonth(tDate, currentDate);
+      }
+      
+      const bank = banks.find(b => b.id === t.bankId);
+      if (!bank || !bank.closingDay) return isSameMonth(tDate, currentDate);
+
+      let billingMonth = tDate;
+      if (getDate(tDate) > bank.closingDay) {
+        billingMonth = addMonths(tDate, 1);
+      }
+      return isSameMonth(billingMonth, currentDate);
+    });
+  }, [transactions, currentDate, banks]);
 
   const today = startOfDay(new Date());
   const endOfSelectedMonth = endOfMonth(currentDate);
 
-  // Saldo projetado ao final do mês selecionado
   const projectedBalance = useMemo(() => {
     const accounts = banks.filter(b => b.type === 'account');
     const currentTotal = accounts.reduce((acc, bank) => acc + bank.balance, 0);
     
-    // Como o bank.balance já inclui TODAS as transações (inclusive as de meses muito distantes),
-    // precisamos subtrair as transações que ocorrem APÓS o final do mês selecionado.
     const futureTransactions = transactions.filter(t => isAfter(parseISO(t.date), endOfSelectedMonth));
     
     const futureImpact = futureTransactions.reduce((acc, t) => {
@@ -53,8 +64,10 @@ const Index = () => {
   }, [banks, transactions, endOfSelectedMonth]);
 
   const totalCredit = useMemo(() => 
-    banks.filter(b => b.type === 'credit_card').reduce((acc, bank) => acc + bank.balance, 0), 
-  [banks]);
+    filteredTransactions
+      .filter(t => t.method === 'credit')
+      .reduce((acc, t) => acc + t.amount, 0), 
+  [filteredTransactions]);
   
   const monthlyIncome = useMemo(() => 
     filteredTransactions
@@ -92,7 +105,7 @@ const Index = () => {
           <header className="flex flex-col items-center text-center space-y-8 py-4">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/5 text-primary text-xs font-bold">
-                <Sparkles size={12} />
+                <span className="animate-pulse">✨</span>
                 <span>Visão Geral do Mês</span>
               </div>
               <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">Dashboard</h1>
