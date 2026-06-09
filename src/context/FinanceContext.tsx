@@ -5,6 +5,11 @@ import { Bank, Transaction } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
 import { addMonths, parseISO, isAfter, isSameDay } from "date-fns";
 
+interface HistoryState {
+  banks: Bank[];
+  transactions: Transaction[];
+}
+
 interface FinanceContextType {
   banks: Bank[];
   transactions: Transaction[];
@@ -14,6 +19,8 @@ interface FinanceContextType {
   addTransaction: (transaction: Transaction) => void;
   deleteTransaction: (id: string, mode?: 'single' | 'future' | 'all') => void;
   updateTransaction: (transaction: Transaction, mode?: 'single' | 'future') => void;
+  undo: () => void;
+  canUndo: boolean;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -25,7 +32,6 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   const [banks, setBanks] = useState<Bank[]>(() => {
     const savedBanks = localStorage.getItem(BANKS_STORAGE_KEY);
     if (savedBanks) return JSON.parse(savedBanks);
-    
     return [
       { id: '1', name: 'Nubank', balance: 0, color: '#8a05be', type: 'account' },
       { id: '2', name: 'Itaú', balance: 0, color: '#ec7000', type: 'account' },
@@ -38,6 +44,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     return savedTransactions ? JSON.parse(savedTransactions) : [];
   });
 
+  const [history, setHistory] = useState<HistoryState[]>([]);
+
   useEffect(() => {
     localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
   }, [banks]);
@@ -46,10 +54,22 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
   }, [transactions]);
 
-  const applyTransactionToBalance = (transaction: Transaction, reverse = false) => {
-    setBanks(prevBanks => prevBanks.map(bank => {
+  const saveHistory = () => {
+    setHistory(prev => [...prev, { banks: JSON.parse(JSON.stringify(banks)), transactions: JSON.parse(JSON.stringify(transactions)) }].slice(-10));
+  };
+
+  const undo = () => {
+    if (history.length === 0) return;
+    const lastState = history[history.length - 1];
+    setBanks(lastState.banks);
+    setTransactions(lastState.transactions);
+    setHistory(prev => prev.slice(0, -1));
+    showSuccess("Ação desfeita!");
+  };
+
+  const applyTransactionToBalance = (transaction: Transaction, reverse = false, currentBanks = banks) => {
+    return currentBanks.map(bank => {
       const multiplier = reverse ? -1 : 1;
-      
       if (bank.id === transaction.bankId) {
         let newBalance = bank.balance;
         if (transaction.method === 'income') {
@@ -61,35 +81,40 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         }
         return { ...bank, balance: newBalance };
       }
-      
       if (transaction.method === 'transfer' && bank.id === transaction.destinationBankId) {
         if (bank.type === 'credit_card') {
           return { ...bank, balance: bank.balance - (transaction.amount * multiplier) };
         }
         return { ...bank, balance: bank.balance + (transaction.amount * multiplier) };
       }
-      
       return bank;
-    }));
+    });
   };
 
-  const addBank = (newBank: Bank) => setBanks(prev => [...prev, newBank]);
+  const addBank = (newBank: Bank) => {
+    saveHistory();
+    setBanks(prev => [...prev, newBank]);
+  };
 
   const removeBank = (id: string) => {
+    saveHistory();
     setBanks(prev => prev.filter(b => b.id !== id));
     setTransactions(prev => prev.filter(t => t.bankId !== id && t.destinationBankId !== id));
   };
 
   const updateBank = (updatedBank: Bank) => {
+    saveHistory();
     setBanks(prev => prev.map(b => b.id === updatedBank.id ? updatedBank : b));
   };
 
   const addTransaction = (t: Transaction) => {
+    saveHistory();
     const newTransactions: Transaction[] = [];
     const count = t.installments || (t.isRecurring ? 12 : 1);
     const baseDate = typeof t.date === 'string' ? parseISO(t.date) : new Date(t.date);
     const groupId = (t.installments || t.isRecurring) ? Math.random().toString(36).substr(2, 9) : undefined;
 
+    let updatedBanks = [...banks];
     for (let i = 0; i < count; i++) {
       const installmentDate = addMonths(baseDate, i);
       const installmentTransaction: Transaction = {
@@ -100,18 +125,19 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         date: installmentDate.toISOString(),
       };
       newTransactions.push(installmentTransaction);
-      applyTransactionToBalance(installmentTransaction);
+      updatedBanks = applyTransactionToBalance(installmentTransaction, false, updatedBanks);
     }
 
+    setBanks(updatedBanks);
     setTransactions(prev => [...newTransactions, ...prev]);
   };
 
   const deleteTransaction = (id: string, mode: 'single' | 'future' | 'all' = 'single') => {
+    saveHistory();
     const target = transactions.find(t => t.id === id);
     if (!target) return;
 
     let toDelete: Transaction[] = [];
-
     if (mode === 'single' || !target.groupId) {
       toDelete = [target];
     } else if (mode === 'future') {
@@ -123,22 +149,29 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       toDelete = transactions.filter(t => t.groupId === target.groupId);
     }
 
-    toDelete.forEach(t => applyTransactionToBalance(t, true));
+    let updatedBanks = [...banks];
+    toDelete.forEach(t => {
+      updatedBanks = applyTransactionToBalance(t, true, updatedBanks);
+    });
+
+    setBanks(updatedBanks);
     const idsToDelete = toDelete.map(t => t.id);
     setTransactions(prev => prev.filter(t => !idsToDelete.includes(t.id)));
     showSuccess(toDelete.length > 1 ? "Transações excluídas!" : "Transação excluída!");
   };
 
   const updateTransaction = (updated: Transaction, mode: 'single' | 'future' = 'single') => {
+    saveHistory();
     const original = transactions.find(t => t.id === updated.id);
     if (!original) return;
 
+    let updatedBanks = [...banks];
     if (mode === 'single' || !original.groupId) {
-      applyTransactionToBalance(original, true);
-      applyTransactionToBalance(updated);
+      updatedBanks = applyTransactionToBalance(original, true, updatedBanks);
+      updatedBanks = applyTransactionToBalance(updated, false, updatedBanks);
+      setBanks(updatedBanks);
       setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
     } else {
-      // Modo 'future': atualiza esta e todas as próximas do mesmo grupo
       const related = transactions.filter(t => 
         t.groupId === original.groupId && 
         (isAfter(parseISO(t.date), parseISO(original.date)) || isSameDay(parseISO(t.date), parseISO(original.date)))
@@ -147,7 +180,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       const updatedTransactions = transactions.map(t => {
         const isRelated = related.find(r => r.id === t.id);
         if (isRelated) {
-          applyTransactionToBalance(t, true);
+          updatedBanks = applyTransactionToBalance(t, true, updatedBanks);
           const newT = { 
             ...t, 
             description: updated.description, 
@@ -157,12 +190,13 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
             destinationBankId: updated.destinationBankId,
             method: updated.method
           };
-          applyTransactionToBalance(newT);
+          updatedBanks = applyTransactionToBalance(newT, false, updatedBanks);
           return newT;
         }
         return t;
       });
 
+      setBanks(updatedBanks);
       setTransactions(updatedTransactions);
     }
     showSuccess("Transação atualizada!");
@@ -170,7 +204,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   return (
     <FinanceContext.Provider value={{ 
-      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction 
+      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction, undo, canUndo: history.length > 0
     }}>
       {children}
     </FinanceContext.Provider>

@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
+import UndoButton from "./UndoButton";
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -26,11 +27,14 @@ const Sidebar = () => {
   return (
     <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 flex flex-col h-screen sticky top-0 hidden md:flex">
       <div className="p-8">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white">
-            <PieChart size={24} />
+        <div className="flex items-center justify-between mb-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white">
+              <PieChart size={24} />
+            </div>
+            <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
           </div>
-          <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
+          <UndoButton />
         </div>
 
         <nav className="space-y-2">
