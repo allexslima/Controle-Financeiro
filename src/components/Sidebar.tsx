@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
-import UndoButton from "./UndoButton";
+import HistoryControls from "./HistoryControls";
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -34,7 +34,7 @@ const Sidebar = () => {
             </div>
             <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
           </div>
-          <UndoButton />
+          <HistoryControls />
         </div>
 
         <nav className="space-y-2">
