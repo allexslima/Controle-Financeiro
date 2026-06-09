@@ -1,11 +1,12 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Transaction, Bank } from "@/types/finance";
-import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2 } from "lucide-react";
+import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2, Search } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import SwipeableTransactionItem from "./SwipeableTransactionItem";
 
 interface TransactionListProps {
@@ -16,6 +17,8 @@ interface TransactionListProps {
 }
 
 const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionListProps) => {
+  const [searchTerm, setSearchTerm] = useState("");
+
   const getBankName = (id: string) => banks.find(b => b.id === id)?.name || "Conta removida";
 
   const getMethodIcon = (method: string) => {
@@ -38,18 +41,35 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
     }
   };
 
+  const filteredTransactions = transactions.filter(t => {
+    const search = searchTerm.toLowerCase();
+    const descriptionMatch = t.description.toLowerCase().includes(search);
+    const amountMatch = t.amount.toString().includes(search);
+    const formattedAmountMatch = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.amount).includes(search);
+    return descriptionMatch || amountMatch || formattedAmountMatch;
+  });
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg overflow-hidden border border-slate-100 dark:border-slate-800">
-      <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+      <div className="p-6 border-b border-slate-100 dark:border-slate-800 space-y-4">
         <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Transações Recentes</h3>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input 
+            placeholder="Buscar por nome ou valor..." 
+            className="pl-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-none"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
       <div className="divide-y divide-slate-50 dark:divide-slate-800">
-        {transactions.length === 0 ? (
+        {filteredTransactions.length === 0 ? (
           <div className="p-12 text-center text-slate-400 dark:text-slate-500">
-            Nenhuma transação registrada ainda.
+            {searchTerm ? "Nenhuma transação encontrada para sua busca." : "Nenhuma transação registrada ainda."}
           </div>
         ) : (
-          transactions.map((transaction) => (
+          filteredTransactions.map((transaction) => (
             <SwipeableTransactionItem 
               key={transaction.id} 
               onDelete={() => onDelete(transaction.id)}
