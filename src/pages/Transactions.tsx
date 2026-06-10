@@ -25,7 +25,7 @@ const TransactionsPage = () => {
   } | null>(null);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
+    const base = transactions.filter(t => {
       const tDate = parseISO(t.date);
       if (t.method !== 'credit') {
         return isSameMonth(tDate, currentDate);
@@ -40,11 +40,36 @@ const TransactionsPage = () => {
       }
       return isSameMonth(billingMonth, currentDate);
     });
+
+    // Agrupar transações de crédito por cartão
+    const nonCredit = base.filter(t => t.method !== 'credit');
+    const creditByBank = base.filter(t => t.method === 'credit').reduce((acc, t) => {
+      if (!acc[t.bankId]) acc[t.bankId] = { amount: 0, count: 0 };
+      acc[t.bankId].amount += t.amount;
+      acc[t.bankId].count += 1;
+      return acc;
+    }, {} as Record<string, { amount: number, count: number }>);
+
+    const groupedCredit: Transaction[] = Object.entries(creditByBank).map(([bankId, data]) => {
+      const bank = banks.find(b => b.id === bankId);
+      return {
+        id: `group-${bankId}`,
+        description: `Fatura ${bank?.name || 'Cartão'}`,
+        amount: data.amount,
+        method: 'credit',
+        category: 'Cartão de Crédito',
+        date: currentDate.toISOString(),
+        bankId: bankId,
+      };
+    });
+
+    return [...nonCredit, ...groupedCredit].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, currentDate, banks]);
 
   const today = startOfDay(new Date());
 
   const handleEditRequest = (t: Transaction) => {
+    if (t.id.startsWith('group-')) return;
     setEditingTransaction(t);
   };
 
@@ -58,6 +83,7 @@ const TransactionsPage = () => {
   };
 
   const handleDeleteRequest = (id: string) => {
+    if (id.startsWith('group-')) return;
     const t = transactions.find(item => item.id === id);
     if (t?.groupId) {
       setPendingAction({ type: 'delete', transaction: t });
@@ -78,19 +104,28 @@ const TransactionsPage = () => {
     setPendingAction(null);
   };
 
-  const completedTotal = useMemo(() => 
-    filteredTransactions
-      .filter(t => !isAfter(parseISO(t.date), today))
-      .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
-  [filteredTransactions, today]);
+  // Cálculo do resumo baseado nas transações originais (não agrupadas) para precisão
+  const summaryData = useMemo(() => {
+    const base = transactions.filter(t => {
+      const tDate = parseISO(t.date);
+      if (t.method !== 'credit') return isSameMonth(tDate, currentDate);
+      const bank = banks.find(b => b.id === t.bankId);
+      if (!bank || !bank.closingDay) return isSameMonth(tDate, currentDate);
+      let billingMonth = tDate;
+      if (getDate(tDate) > bank.closingDay) billingMonth = addMonths(tDate, 1);
+      return isSameMonth(billingMonth, currentDate);
+    });
 
-  const futureTotal = useMemo(() => 
-    filteredTransactions
-      .filter(t => isAfter(parseISO(t.date), today))
-      .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0),
-  [filteredTransactions, today]);
+    const completed = base.filter(t => !isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0);
+    
+    const future = base.filter(t => isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0);
 
-  const grandTotal = completedTotal + futureTotal;
+    return { completed, future };
+  }, [transactions, currentDate, banks, today]);
+
+  const grandTotal = summaryData.completed + summaryData.future;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -116,14 +151,14 @@ const TransactionsPage = () => {
           <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
             <div className="flex justify-between text-sm font-medium text-slate-500">
               <span>Valores Efetuados (Mês)</span>
-              <span className={completedTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completedTotal)}
+              <span className={summaryData.completed >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.completed)}
               </span>
             </div>
             <div className="flex justify-between text-sm font-medium text-slate-500">
               <span>Valores Futuros (Mês)</span>
-              <span className={futureTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(futureTotal)}
+              <span className={summaryData.future >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
               </span>
             </div>
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">

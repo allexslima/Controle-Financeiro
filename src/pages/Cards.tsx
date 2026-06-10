@@ -13,7 +13,7 @@ import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import PayInvoiceDialog from "@/components/PayInvoiceDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
-import { isSameMonth, parseISO, isAfter, startOfDay, isBefore, endOfDay, getDate, addMonths, subMonths } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, getDate, addMonths } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Pencil } from "lucide-react";
 
@@ -26,15 +26,10 @@ const CardsPage = () => {
 
   const creditCards = banks.filter(b => b.type === 'credit_card');
 
-  // Lógica centralizada para determinar a qual fatura (mês) uma transação pertence
   const getBillingMonth = (transaction: Transaction, bank: Bank | undefined) => {
     const tDate = parseISO(transaction.date);
     if (!bank || !bank.closingDay) return tDate;
-
-    // Se o dia da compra for maior que o dia de fechamento, pertence à fatura do mês seguinte
-    if (getDate(tDate) > bank.closingDay) {
-      return addMonths(tDate, 1);
-    }
+    if (getDate(tDate) > bank.closingDay) return addMonths(tDate, 1);
     return tDate;
   };
 
@@ -44,30 +39,40 @@ const CardsPage = () => {
       if (t.bankId !== selectedCard.id && t.destinationBankId !== selectedCard.id) return false;
       const billingMonth = getBillingMonth(t, selectedCard);
       return isSameMonth(billingMonth, currentDate);
-    });
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, selectedCard, currentDate]);
 
-  const today = endOfDay(new Date());
+  const today = startOfDay(new Date());
 
-  // Fatura até o momento (compras da fatura atual feitas até hoje)
-  const invoiceUntilToday = useMemo(() => 
-    filteredTransactions
-      .filter(t => !isAfter(parseISO(t.date), today) && t.method === 'credit')
-      .reduce((acc, t) => acc + t.amount, 0),
-  [filteredTransactions, today]);
+  const summaryData = useMemo(() => {
+    if (!selectedCard) return { completed: 0, future: 0 };
+    
+    const completed = filteredTransactions
+      .filter(t => !isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => {
+        if (t.method === 'credit') return acc - t.amount;
+        if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
+        return acc;
+      }, 0);
 
-  // Fatura até o fechamento (todas as compras que pertencem a esta fatura)
-  const invoiceUntilClosing = useMemo(() => 
-    filteredTransactions
-      .filter(t => t.method === 'credit')
-      .reduce((acc, t) => acc + t.amount, 0),
-  [filteredTransactions]);
+    const future = filteredTransactions
+      .filter(t => isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => {
+        if (t.method === 'credit') return acc - t.amount;
+        if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
+        return acc;
+      }, 0);
+
+    return { completed, future };
+  }, [filteredTransactions, today, selectedCard]);
+
+  const grandTotal = summaryData.completed + summaryData.future;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
       <Sidebar />
       <MobileNav />
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto pb-32 md:pb-10">
         <div className="max-w-5xl mx-auto space-y-8">
           {!selectedCard ? (
             <>
@@ -122,19 +127,11 @@ const CardsPage = () => {
                     <CreditCard size={32} className="text-slate-700" />
                   </div>
                   
-                  <div className="mt-8 flex flex-col md:flex-row md:items-end gap-8">
-                    <div>
-                      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Fatura até o momento</p>
-                      <p className="text-4xl font-black">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilToday)}
-                      </p>
-                    </div>
-                    <div className="pb-1">
-                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Fatura até o Fechamento</p>
-                      <p className="text-xl font-black text-rose-400">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilClosing)}
-                      </p>
-                    </div>
+                  <div className="mt-8">
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Total da Fatura</p>
+                    <p className="text-4xl font-black">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(grandTotal))}
+                    </p>
                   </div>
 
                   <div className="mt-8 max-w-[200px]">
@@ -144,27 +141,33 @@ const CardsPage = () => {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16" />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-                  <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Compras Efetuadas (Mês)</p>
-                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilToday)}
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-                  <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Despesas Futuras (Mês)</p>
-                  <p className="text-2xl font-black text-rose-600 mt-2">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilClosing - invoiceUntilToday)}
-                  </p>
-                </div>
-              </div>
-
               <TransactionList 
                 transactions={filteredTransactions} 
                 banks={banks} 
                 onEdit={setEditingTransaction} 
                 onDelete={deleteTransaction}
               />
+
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
+                <div className="flex justify-between text-sm font-medium text-slate-500">
+                  <span>Valores Efetuados (Mês)</span>
+                  <span className={summaryData.completed >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.completed)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-medium text-slate-500">
+                  <span>Valores Futuros (Mês)</span>
+                  <span className={summaryData.future >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
+                  </span>
+                </div>
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                  <span className="text-lg font-black text-slate-900 dark:text-white">Total do Mês</span>
+                  <span className={`text-2xl font-black ${grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>
