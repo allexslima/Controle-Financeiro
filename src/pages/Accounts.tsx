@@ -10,7 +10,6 @@ import EditBankDialog from "@/components/EditBankDialog";
 import EditTransactionDialog from "@/components/EditTransactionDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import AddBankDialog from "@/components/AddBankDialog";
-import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
 import { isSameMonth, parseISO, isAfter, endOfMonth, endOfDay } from "date-fns";
@@ -24,13 +23,6 @@ const AccountsPage = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{
-    type: 'edit' | 'delete',
-    transaction: Transaction,
-    updatedData?: Transaction
-  } | null>(null);
-
   const accountBanks = banks.filter(b => b.type === 'account');
 
   const filteredTransactions = useMemo(() => {
@@ -41,42 +33,10 @@ const AccountsPage = () => {
     );
   }, [transactions, selectedBank, currentDate]);
 
-  const handleEditRequest = (t: Transaction) => {
-    setEditingTransaction(t);
-  };
-
-  const handleUpdate = (updated: Transaction) => {
-    if (updated.groupId) {
-      setPendingAction({ type: 'edit', transaction: updated, updatedData: updated });
-      setRecurringDialogOpen(true);
-    } else {
-      updateTransaction(updated);
-    }
-  };
-
-  const handleDeleteRequest = (id: string) => {
-    const t = transactions.find(item => item.id === id);
-    if (t?.groupId) {
-      setPendingAction({ type: 'delete', transaction: t });
-      setRecurringDialogOpen(true);
-    } else {
-      deleteTransaction(id);
-    }
-  };
-
-  const handleRecurringAction = (mode: 'single' | 'future' | 'all') => {
-    if (!pendingAction) return;
-    if (pendingAction.type === 'delete') {
-      deleteTransaction(pendingAction.transaction.id, mode);
-    } else if (pendingAction.type === 'edit' && pendingAction.updatedData) {
-      updateTransaction(pendingAction.updatedData, mode as 'single' | 'future' | 'all');
-    }
-    setPendingAction(null);
-  };
-
   const today = endOfDay(new Date());
   const endOfSelectedMonth = endOfMonth(currentDate);
 
+  // Saldo no final do mês selecionado
   const balanceAtEndOfMonth = useMemo(() => {
     if (!selectedBank) return 0;
     const afterMonthTransactions = transactions.filter(t => 
@@ -157,8 +117,8 @@ const AccountsPage = () => {
               <TransactionList 
                 transactions={filteredTransactions} 
                 banks={banks} 
-                onEdit={handleEditRequest} 
-                onDelete={handleDeleteRequest}
+                onEdit={setEditingTransaction} 
+                onDelete={deleteTransaction}
               />
             </div>
           )}
@@ -173,19 +133,8 @@ const AccountsPage = () => {
         <EditTransactionDialog 
           transaction={editingTransaction}
           banks={banks}
-          onUpdate={handleUpdate}
+          onUpdate={updateTransaction}
           onClose={() => setEditingTransaction(null)}
-        />
-
-        <RecurringActionDialog 
-          open={recurringDialogOpen}
-          onOpenChange={setRecurringDialogOpen}
-          title={pendingAction?.type === 'edit' ? "Editar Transação Recorrente" : "Excluir Transação Recorrente"}
-          description={pendingAction?.type === 'edit' 
-            ? "Esta transação faz parte de um grupo. Como deseja aplicar as alterações?" 
-            : "Esta transação faz parte de um grupo. Como deseja realizar a exclusão?"}
-          type={pendingAction?.type || 'edit'}
-          onAction={handleRecurringAction}
         />
       </main>
     </div>
