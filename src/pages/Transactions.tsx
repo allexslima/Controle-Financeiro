@@ -17,7 +17,6 @@ const TransactionsPage = () => {
   const { transactions, banks, deleteTransaction, updateTransaction, addTransaction } = useFinance();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   
-  // Estados para o diálogo de recorrência
   const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
     type: 'edit' | 'delete',
@@ -97,7 +96,7 @@ const TransactionsPage = () => {
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
       <Sidebar />
       <MobileNav />
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto pb-32 md:pb-10">
         <div className="max-w-5xl mx-auto space-y-8">
           <header className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">

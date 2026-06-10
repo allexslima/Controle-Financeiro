@@ -40,7 +40,7 @@ const MobileNav = () => {
       </div>
 
       {/* Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 px-6 py-3 flex items-center justify-between z-50 pb-safe">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-lg border-t border-slate-100 dark:border-slate-800 px-6 py-3 flex items-center justify-between z-50 pb-safe">
         <div className="flex items-center justify-between w-full max-w-md mx-auto">
           {navItems.slice(0, 2).map((item) => (
             <Link
@@ -82,7 +82,7 @@ const MobileNav = () => {
       </nav>
       
       {/* Spacer to prevent content from being hidden behind the bottom nav */}
-      <div className="md:hidden h-20" />
+      <div className="md:hidden h-28" />
     </>
   );
 };

@@ -19,6 +19,7 @@ interface FinanceContextType {
   addTransaction: (transaction: Transaction) => void;
   deleteTransaction: (id: string, mode?: 'single' | 'future' | 'all') => void;
   updateTransaction: (transaction: Transaction, mode?: 'single' | 'future') => void;
+  reorderTransactions: (startIndex: number, endIndex: number) => void;
   undo: () => void;
   canUndo: boolean;
 }
@@ -202,9 +203,17 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     showSuccess("Transação atualizada!");
   };
 
+  const reorderTransactions = (startIndex: number, endIndex: number) => {
+    saveHistory();
+    const result = Array.from(transactions);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    setTransactions(result);
+  };
+
   return (
     <FinanceContext.Provider value={{ 
-      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction, undo, canUndo: history.length > 0
+      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction, reorderTransactions, undo, canUndo: history.length > 0
     }}>
       {children}
     </FinanceContext.Provider>
