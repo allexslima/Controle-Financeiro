@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Bank, Transaction } from "@/types/finance";
 import { showSuccess } from "@/utils/toast";
 import { addMonths, parseISO, isAfter, isSameDay } from "date-fns";
-import { arrayMove } from "@dnd-kit/sortable";
 
 interface HistoryState {
   banks: Bank[];
@@ -20,11 +19,8 @@ interface FinanceContextType {
   addTransaction: (transaction: Transaction) => void;
   deleteTransaction: (id: string, mode?: 'single' | 'future' | 'all') => void;
   updateTransaction: (transaction: Transaction, mode?: 'single' | 'future') => void;
-  reorderTransactions: (oldIndex: number, newIndex: number) => void;
   undo: () => void;
-  redo: () => void;
   canUndo: boolean;
-  canRedo: boolean;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -48,8 +44,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     return savedTransactions ? JSON.parse(savedTransactions) : [];
   });
 
-  const [past, setPast] = useState<HistoryState[]>([]);
-  const [future, setFuture] = useState<HistoryState[]>([]);
+  const [history, setHistory] = useState<HistoryState[]>([]);
 
   useEffect(() => {
     localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
@@ -60,32 +55,16 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   }, [transactions]);
 
   const saveHistory = () => {
-    setPast(prev => [...prev, { banks: JSON.parse(JSON.stringify(banks)), transactions: JSON.parse(JSON.stringify(transactions)) }].slice(-20));
-    setFuture([]); // Clear redo stack on new action
+    setHistory(prev => [...prev, { banks: JSON.parse(JSON.stringify(banks)), transactions: JSON.parse(JSON.stringify(transactions)) }].slice(-10));
   };
 
   const undo = () => {
-    if (past.length === 0) return;
-    const previous = past[past.length - 1];
-    const current = { banks: JSON.parse(JSON.stringify(banks)), transactions: JSON.parse(JSON.stringify(transactions)) };
-    
-    setFuture(prev => [current, ...prev]);
-    setBanks(previous.banks);
-    setTransactions(previous.transactions);
-    setPast(prev => prev.slice(0, -1));
+    if (history.length === 0) return;
+    const lastState = history[history.length - 1];
+    setBanks(lastState.banks);
+    setTransactions(lastState.transactions);
+    setHistory(prev => prev.slice(0, -1));
     showSuccess("Ação desfeita!");
-  };
-
-  const redo = () => {
-    if (future.length === 0) return;
-    const next = future[0];
-    const current = { banks: JSON.parse(JSON.stringify(banks)), transactions: JSON.parse(JSON.stringify(transactions)) };
-    
-    setPast(prev => [...prev, current]);
-    setBanks(next.banks);
-    setTransactions(next.transactions);
-    setFuture(prev => prev.slice(1));
-    showSuccess("Ação refeita!");
   };
 
   const applyTransactionToBalance = (transaction: Transaction, reverse = false, currentBanks = banks) => {
@@ -223,26 +202,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     showSuccess("Transação atualizada!");
   };
 
-  const reorderTransactions = (oldIndex: number, newIndex: number) => {
-    saveHistory();
-    setTransactions((prev) => arrayMove(prev, oldIndex, newIndex));
-  };
-
   return (
     <FinanceContext.Provider value={{ 
-      banks, 
-      transactions, 
-      addBank, 
-      removeBank, 
-      updateBank, 
-      addTransaction, 
-      deleteTransaction, 
-      updateTransaction, 
-      reorderTransactions,
-      undo, 
-      redo,
-      canUndo: past.length > 0,
-      canRedo: future.length > 0
+      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction, undo, canUndo: history.length > 0
     }}>
       {children}
     </FinanceContext.Provider>
