@@ -2,14 +2,12 @@
 
 import React, { useState } from 'react';
 import { Transaction, Bank } from "@/types/finance";
-import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2, Search, GripVertical } from "lucide-react";
+import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2, Search } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SwipeableTransactionItem from "./SwipeableTransactionItem";
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { useFinance } from "@/context/FinanceContext";
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -20,7 +18,6 @@ interface TransactionListProps {
 
 const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const { reorderTransactions } = useFinance();
 
   const getBankName = (id: string) => banks.find(b => b.id === id)?.name || "Conta removida";
 
@@ -52,19 +49,6 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
     return descriptionMatch || amountMatch || formattedAmountMatch;
   });
 
-  const onDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
-    
-    // Encontrar os índices reais no array original de transações
-    const sourceId = filteredTransactions[result.source.index].id;
-    const destinationId = filteredTransactions[result.destination.index].id;
-    
-    const sourceIndex = transactions.findIndex(t => t.id === sourceId);
-    const destinationIndex = transactions.findIndex(t => t.id === destinationId);
-    
-    reorderTransactions(sourceIndex, destinationIndex);
-  };
-
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg overflow-hidden border border-slate-100 dark:border-slate-800">
       <div className="p-6 border-b border-slate-100 dark:border-slate-800 space-y-4">
@@ -80,102 +64,79 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
         </div>
       </div>
 
-      <DragDropContext onDragEnd={onDragEnd}>
-        <Droppable droppableId="transactions">
-          {(provided) => (
-            <div 
-              {...provided.droppableProps} 
-              ref={provided.innerRef}
-              className="divide-y divide-slate-50 dark:divide-slate-800"
+      <div className="divide-y divide-slate-50 dark:divide-slate-800">
+        {filteredTransactions.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 dark:text-slate-500">
+            {searchTerm ? "Nenhuma transação encontrada para sua busca." : "Nenhuma transação registrada ainda."}
+          </div>
+        ) : (
+          filteredTransactions.map((transaction) => (
+            <SwipeableTransactionItem 
+              key={transaction.id}
+              onDelete={() => onDelete(transaction.id)}
+              onEdit={() => onEdit(transaction)}
             >
-              {filteredTransactions.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 dark:text-slate-500">
-                  {searchTerm ? "Nenhuma transação encontrada para sua busca." : "Nenhuma transação registrada ainda."}
+              <div className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-between group">
+                <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-2xl ${getMethodBg(transaction.method)}`}>
+                    {getMethodIcon(transaction.method)}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 dark:text-slate-100">{transaction.description}</p>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full capitalize">
+                        {transaction.method === 'income' ? 'Receita' : 
+                         transaction.method === 'transfer' ? 'Transferência' : 
+                         transaction.method}
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {transaction.method === 'transfer' 
+                          ? `${getBankName(transaction.bankId)} → ${getBankName(transaction.destinationBankId!)}`
+                          : getBankName(transaction.bankId)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                filteredTransactions.map((transaction, index) => (
-                  <Draggable key={transaction.id} draggableId={transaction.id} index={index}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        className={snapshot.isDragging ? "z-50 shadow-2xl" : ""}
-                      >
-                        <SwipeableTransactionItem 
-                          onDelete={() => onDelete(transaction.id)}
-                          onEdit={() => onEdit(transaction)}
-                        >
-                          <div className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-between group">
-                            <div className="flex items-center gap-4">
-                              <div {...provided.dragHandleProps} className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing p-1">
-                                <GripVertical size={20} />
-                              </div>
-                              <div className={`p-2 rounded-2xl ${getMethodBg(transaction.method)}`}>
-                                {getMethodIcon(transaction.method)}
-                              </div>
-                              <div>
-                                <p className="font-bold text-slate-800 dark:text-slate-100">{transaction.description}</p>
-                                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                                  <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full capitalize">
-                                    {transaction.method === 'income' ? 'Receita' : 
-                                     transaction.method === 'transfer' ? 'Transferência' : 
-                                     transaction.method}
-                                  </span>
-                                  <span>•</span>
-                                  <span>
-                                    {transaction.method === 'transfer' 
-                                      ? `${getBankName(transaction.bankId)} → ${getBankName(transaction.destinationBankId!)}`
-                                      : getBankName(transaction.bankId)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <div className="text-right">
-                                <p className={`font-bold ${
-                                  transaction.method === 'income' ? 'text-emerald-600' : 
-                                  transaction.method === 'transfer' ? 'text-orange-500' : 'text-rose-600'
-                                }`}>
-                                  {transaction.method === 'income' ? '+' : 
-                                   transaction.method === 'transfer' ? '' : '-'} 
-                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
-                                </p>
-                                <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1">
-                                  <Calendar size={10} />
-                                  {format(new Date(transaction.date), "dd 'de' MMM", { locale: ptBR })}
-                                </p>
-                              </div>
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-slate-400 hover:text-primary dark:hover:text-white"
-                                  onClick={() => onEdit(transaction)}
-                                >
-                                  <Pencil size={14} />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-slate-400 hover:text-destructive"
-                                  onClick={() => onDelete(transaction.id)}
-                                >
-                                  <Trash2 size={14} />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </SwipeableTransactionItem>
-                      </div>
-                    )}
-                  </Draggable>
-                ))
-              )}
-              {provided.placeholder}
-            </div>
-          )}
-        </Droppable>
-      </DragDropContext>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className={`font-bold ${
+                      transaction.method === 'income' ? 'text-emerald-600' : 
+                      transaction.method === 'transfer' ? 'text-orange-500' : 'text-rose-600'
+                    }`}>
+                      {transaction.method === 'income' ? '+' : 
+                       transaction.method === 'transfer' ? '' : '-'} 
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
+                    </p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1">
+                      <Calendar size={10} />
+                      {format(new Date(transaction.date), "dd 'de' MMM", { locale: ptBR })}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-slate-400 hover:text-primary dark:hover:text-white"
+                      onClick={() => onEdit(transaction)}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-slate-400 hover:text-destructive"
+                      onClick={() => onDelete(transaction.id)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </SwipeableTransactionItem>
+          ))
+        )}
+      </div>
     </div>
   );
 };
