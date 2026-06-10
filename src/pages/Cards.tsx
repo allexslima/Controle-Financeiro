@@ -11,6 +11,7 @@ import EditTransactionDialog from "@/components/EditTransactionDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import PayInvoiceDialog from "@/components/PayInvoiceDialog";
+import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
 import { isSameMonth, parseISO, isAfter, startOfDay, isBefore, endOfDay, getDate, addMonths, subMonths } from "date-fns";
@@ -24,14 +25,18 @@ const CardsPage = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'edit' | 'delete',
+    transaction: Transaction,
+    updatedData?: Transaction
+  } | null>(null);
+
   const creditCards = banks.filter(b => b.type === 'credit_card');
 
-  // Lógica centralizada para determinar a qual fatura (mês) uma transação pertence
   const getBillingMonth = (transaction: Transaction, bank: Bank | undefined) => {
     const tDate = parseISO(transaction.date);
     if (!bank || !bank.closingDay) return tDate;
-
-    // Se o dia da compra for maior que o dia de fechamento, pertence à fatura do mês seguinte
     if (getDate(tDate) > bank.closingDay) {
       return addMonths(tDate, 1);
     }
@@ -47,16 +52,47 @@ const CardsPage = () => {
     });
   }, [transactions, selectedCard, currentDate]);
 
+  const handleEditRequest = (t: Transaction) => {
+    setEditingTransaction(t);
+  };
+
+  const handleUpdate = (updated: Transaction) => {
+    if (updated.groupId) {
+      setPendingAction({ type: 'edit', transaction: updated, updatedData: updated });
+      setRecurringDialogOpen(true);
+    } else {
+      updateTransaction(updated);
+    }
+  };
+
+  const handleDeleteRequest = (id: string) => {
+    const t = transactions.find(item => item.id === id);
+    if (t?.groupId) {
+      setPendingAction({ type: 'delete', transaction: t });
+      setRecurringDialogOpen(true);
+    } else {
+      deleteTransaction(id);
+    }
+  };
+
+  const handleRecurringAction = (mode: 'single' | 'future' | 'all') => {
+    if (!pendingAction) return;
+    if (pendingAction.type === 'delete') {
+      deleteTransaction(pendingAction.transaction.id, mode);
+    } else if (pendingAction.type === 'edit' && pendingAction.updatedData) {
+      updateTransaction(pendingAction.updatedData, mode as 'single' | 'future' | 'all');
+    }
+    setPendingAction(null);
+  };
+
   const today = endOfDay(new Date());
 
-  // Fatura até o momento (compras da fatura atual feitas até hoje)
   const invoiceUntilToday = useMemo(() => 
     filteredTransactions
       .filter(t => !isAfter(parseISO(t.date), today) && t.method === 'credit')
       .reduce((acc, t) => acc + t.amount, 0),
   [filteredTransactions, today]);
 
-  // Fatura até o fechamento (todas as compras que pertencem a esta fatura)
   const invoiceUntilClosing = useMemo(() => 
     filteredTransactions
       .filter(t => t.method === 'credit')
@@ -144,26 +180,11 @@ const CardsPage = () => {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16" />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-                  <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Compras Efetuadas (Mês)</p>
-                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilToday)}
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-                  <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Despesas Futuras (Mês)</p>
-                  <p className="text-2xl font-black text-rose-600 mt-2">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoiceUntilClosing - invoiceUntilToday)}
-                  </p>
-                </div>
-              </div>
-
               <TransactionList 
                 transactions={filteredTransactions} 
                 banks={banks} 
-                onEdit={setEditingTransaction} 
-                onDelete={deleteTransaction}
+                onEdit={handleEditRequest} 
+                onDelete={handleDeleteRequest}
               />
             </div>
           )}
@@ -178,8 +199,19 @@ const CardsPage = () => {
         <EditTransactionDialog 
           transaction={editingTransaction}
           banks={banks}
-          onUpdate={updateTransaction}
+          onUpdate={handleUpdate}
           onClose={() => setEditingTransaction(null)}
+        />
+
+        <RecurringActionDialog 
+          open={recurringDialogOpen}
+          onOpenChange={setRecurringDialogOpen}
+          title={pendingAction?.type === 'edit' ? "Editar Transação Recorrente" : "Excluir Transação Recorrente"}
+          description={pendingAction?.type === 'edit' 
+            ? "Esta transação faz parte de um grupo. Como deseja aplicar as alterações?" 
+            : "Esta transação faz parte de um grupo. Como deseja realizar a exclusão?"}
+          type={pendingAction?.type || 'edit'}
+          onAction={handleRecurringAction}
         />
       </main>
     </div>

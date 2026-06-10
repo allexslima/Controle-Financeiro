@@ -62,18 +62,16 @@ const RecurringActionDialog = ({
             Esta e as próximas
           </Button>
 
-          {type === 'delete' && (
-            <Button 
-              variant="outline" 
-              className="justify-start h-12 rounded-xl font-semibold text-rose-600 hover:text-rose-700"
-              onClick={() => {
-                onAction('all');
-                onOpenChange(false);
-              }}
-            >
-              Todas as ocorrências
-            </Button>
-          )}
+          <Button 
+            variant="outline" 
+            className={`justify-start h-12 rounded-xl font-semibold ${type === 'delete' ? 'text-rose-600 hover:text-rose-700' : 'text-primary'}`}
+            onClick={() => {
+              onAction('all');
+              onOpenChange(false);
+            }}
+          >
+            Todas as ocorrências
+          </Button>
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>

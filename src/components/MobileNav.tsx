@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
 import AddTransactionDialog from "./AddTransactionDialog";
 import { useFinance } from "@/context/FinanceContext";
-import UndoButton from "./UndoButton";
+import UndoRedoGroup from "./UndoRedoGroup";
 
 const MobileNav = () => {
   const location = useLocation();
@@ -28,7 +28,7 @@ const MobileNav = () => {
 
   return (
     <>
-      {/* Top Bar for Mobile (Logo and Undo) */}
+      {/* Top Bar for Mobile (Logo and Undo/Redo) */}
       <div className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
@@ -36,7 +36,7 @@ const MobileNav = () => {
           </div>
           <span className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
         </div>
-        <UndoButton />
+        <UndoRedoGroup />
       </div>
 
       {/* Bottom Navigation Bar */}

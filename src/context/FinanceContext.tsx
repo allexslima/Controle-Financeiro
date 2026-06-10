@@ -18,9 +18,12 @@ interface FinanceContextType {
   updateBank: (bank: Bank) => void;
   addTransaction: (transaction: Transaction) => void;
   deleteTransaction: (id: string, mode?: 'single' | 'future' | 'all') => void;
-  updateTransaction: (transaction: Transaction, mode?: 'single' | 'future') => void;
+  updateTransaction: (transaction: Transaction, mode?: 'single' | 'future' | 'all') => void;
+  reorderTransactions: (newTransactions: Transaction[]) => void;
   undo: () => void;
+  redo: () => void;
   canUndo: boolean;
+  canRedo: boolean;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -44,7 +47,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     return savedTransactions ? JSON.parse(savedTransactions) : [];
   });
 
-  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [undoStack, setUndoStack] = useState<HistoryState[]>([]);
+  const [redoStack, setRedoStack] = useState<HistoryState[]>([]);
 
   useEffect(() => {
     localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
@@ -55,16 +59,41 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   }, [transactions]);
 
   const saveHistory = () => {
-    setHistory(prev => [...prev, { banks: JSON.parse(JSON.stringify(banks)), transactions: JSON.parse(JSON.stringify(transactions)) }].slice(-10));
+    setUndoStack(prev => [...prev, { 
+      banks: JSON.parse(JSON.stringify(banks)), 
+      transactions: JSON.parse(JSON.stringify(transactions)) 
+    }].slice(-20));
+    setRedoStack([]); // Limpa o redo ao fazer nova ação
   };
 
   const undo = () => {
-    if (history.length === 0) return;
-    const lastState = history[history.length - 1];
+    if (undoStack.length === 0) return;
+    const lastState = undoStack[undoStack.length - 1];
+    
+    setRedoStack(prev => [...prev, { 
+      banks: JSON.parse(JSON.stringify(banks)), 
+      transactions: JSON.parse(JSON.stringify(transactions)) 
+    }]);
+    
     setBanks(lastState.banks);
     setTransactions(lastState.transactions);
-    setHistory(prev => prev.slice(0, -1));
+    setUndoStack(prev => prev.slice(0, -1));
     showSuccess("Ação desfeita!");
+  };
+
+  const redo = () => {
+    if (redoStack.length === 0) return;
+    const nextState = redoStack[redoStack.length - 1];
+    
+    setUndoStack(prev => [...prev, { 
+      banks: JSON.parse(JSON.stringify(banks)), 
+      transactions: JSON.parse(JSON.stringify(transactions)) 
+    }]);
+    
+    setBanks(nextState.banks);
+    setTransactions(nextState.transactions);
+    setRedoStack(prev => prev.slice(0, -1));
+    showSuccess("Ação refeita!");
   };
 
   const applyTransactionToBalance = (transaction: Transaction, reverse = false, currentBanks = banks) => {
@@ -123,6 +152,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         groupId,
         description: count > 1 && t.installments ? `${t.description} (${i + 1}/${count})` : t.description,
         date: installmentDate.toISOString(),
+        order: Date.now() + i, // Garante uma ordem inicial
       };
       newTransactions.push(installmentTransaction);
       updatedBanks = applyTransactionToBalance(installmentTransaction, false, updatedBanks);
@@ -160,7 +190,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     showSuccess(toDelete.length > 1 ? "Transações excluídas!" : "Transação excluída!");
   };
 
-  const updateTransaction = (updated: Transaction, mode: 'single' | 'future' = 'single') => {
+  const updateTransaction = (updated: Transaction, mode: 'single' | 'future' | 'all' = 'single') => {
     saveHistory();
     const original = transactions.find(t => t.id === updated.id);
     if (!original) return;
@@ -172,10 +202,11 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       setBanks(updatedBanks);
       setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
     } else {
-      const related = transactions.filter(t => 
-        t.groupId === original.groupId && 
-        (isAfter(parseISO(t.date), parseISO(original.date)) || isSameDay(parseISO(t.date), parseISO(original.date)))
-      );
+      const related = transactions.filter(t => {
+        if (mode === 'all') return t.groupId === original.groupId;
+        return t.groupId === original.groupId && 
+               (isAfter(parseISO(t.date), parseISO(original.date)) || isSameDay(parseISO(t.date), parseISO(original.date)));
+      });
 
       const updatedTransactions = transactions.map(t => {
         const isRelated = related.find(r => r.id === t.id);
@@ -202,9 +233,28 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     showSuccess("Transação atualizada!");
   };
 
+  const reorderTransactions = (newTransactions: Transaction[]) => {
+    saveHistory();
+    // Atualiza a ordem baseada na nova posição no array
+    const ordered = newTransactions.map((t, index) => ({ ...t, order: index }));
+    setTransactions(ordered);
+  };
+
   return (
     <FinanceContext.Provider value={{ 
-      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction, undo, canUndo: history.length > 0
+      banks, 
+      transactions, 
+      addBank, 
+      removeBank, 
+      updateBank, 
+      addTransaction, 
+      deleteTransaction, 
+      updateTransaction, 
+      reorderTransactions,
+      undo, 
+      redo,
+      canUndo: undoStack.length > 0,
+      canRedo: redoStack.length > 0
     }}>
       {children}
     </FinanceContext.Provider>
