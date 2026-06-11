@@ -145,9 +145,9 @@ const CardsPage = () => {
                   </div>
                   
                   <div className="mt-8">
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Fatura Efetivada</p>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Total da Fatura</p>
                     <p className="text-4xl font-black">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(getCompletedInvoice(selectedCard)))}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(grandTotal))}
                     </p>
                   </div>
 
