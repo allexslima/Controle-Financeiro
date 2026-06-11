@@ -83,7 +83,7 @@ const AccountsPage = () => {
                 <h1 className="text-3xl font-black text-slate-900 dark:text-white">Minhas Contas</h1>
                 <div className="flex items-center gap-2">
                   <AddBankDialog onAdd={addBank} />
-                  <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                  <AddTransactionDialog banks={banks} onAdd={addTransaction} />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -105,7 +105,7 @@ const AccountsPage = () => {
                   <Button variant="ghost" onClick={() => setSelectedBank(null)} className="gap-2 self-start text-slate-600 dark:text-slate-400">
                     <ArrowLeft size={18} /> Voltar
                   </Button>
-                  <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                  <AddTransactionDialog banks={banks} onAdd={addTransaction} />
                 </div>
                 <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
               </div>

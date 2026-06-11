@@ -80,7 +80,7 @@ const CardsPage = () => {
                 <h1 className="text-3xl font-black text-slate-900 dark:text-white">Meus Cartões</h1>
                 <div className="flex items-center gap-2">
                   <AddCreditCardDialog onAdd={addBank} variant="discrete" />
-                  <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                  <AddTransactionDialog banks={banks} onAdd={addTransaction} />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -104,7 +104,7 @@ const CardsPage = () => {
                   <Button variant="ghost" onClick={() => setSelectedCard(null)} className="gap-2 self-start text-slate-600 dark:text-slate-400">
                     <ArrowLeft size={18} /> Voltar
                   </Button>
-                  <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+                  <AddTransactionDialog banks={banks} onAdd={addTransaction} />
                 </div>
                 <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
               </div>

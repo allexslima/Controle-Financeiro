@@ -108,7 +108,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     <Dialog open={open} onOpenChange={(val) => { setOpen(val); if(!val) resetForm(); }}>
       <DialogTrigger asChild>
         {variant === 'default' ? (
-          <Button className="rounded-full px-8 py-6 text-lg font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
+          <Button className="rounded-full px-8 py-6 text-base font-bold bg-[#1e293b] hover:bg-[#0f172a] text-white shadow-xl transition-all hover:scale-105">
             Nova Transação
           </Button>
         ) : (

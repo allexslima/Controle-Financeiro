@@ -136,7 +136,7 @@ const TransactionsPage = () => {
           <header className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <h1 className="text-3xl font-black text-slate-900 dark:text-white">Todas as Transações</h1>
-              <AddTransactionDialog banks={banks} onAdd={addTransaction} variant="discrete" />
+              <AddTransactionDialog banks={banks} onAdd={addTransaction} />
             </div>
             <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
           </header>
