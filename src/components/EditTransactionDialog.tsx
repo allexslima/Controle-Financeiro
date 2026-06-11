@@ -213,6 +213,25 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
             </div>
           )}
 
+          <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-2xl">
+              <Checkbox 
+                id="edit-recurring" 
+                checked={isRecurring} 
+                onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="edit-recurring"
+                  className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
+                >
+                  <Repeat size={14} className="text-primary" />
+                  Transação Recorrente
+                </label>
+              </div>
+            </div>
+          </div>
+
           <DialogFooter className="pt-4">
             <Button type="submit" className="w-full rounded-2xl py-6 text-lg font-black">Salvar Alterações</Button>
           </DialogFooter>
