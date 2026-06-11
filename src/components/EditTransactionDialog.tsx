@@ -13,10 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat } from "lucide-react";
+import { CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat, CheckCircle2 } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isAfter, startOfDay } from "date-fns";
 
 interface EditTransactionDialogProps {
   transaction: Transaction | null;
@@ -35,9 +35,9 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
   const [date, setDate] = useState("");
   const [installments, setInstallments] = useState("1");
   const [isRecurring, setIsRecurring] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
 
-  // Sugestões de categorias baseadas em transações existentes
-  const categorySuggestions = Array.from(new Set(banks.flatMap(() => []).concat(["Alimentação", "Lazer", "Saúde", "Transporte", "Educação", "Moradia"])));
+  const today = startOfDay(new Date());
 
   useEffect(() => {
     if (transaction) {
@@ -50,6 +50,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       setDate(format(parseISO(transaction.date), "yyyy-MM-dd"));
       setInstallments(transaction.installments?.toString() || "1");
       setIsRecurring(transaction.isRecurring || false);
+      setIsCompleted(transaction.isCompleted || false);
     }
   }, [transaction]);
 
@@ -58,15 +59,28 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
     return bank.type === 'account';
   });
 
+  const handleEfetivar = () => {
+    if (!transaction) return;
+    const updatedTransaction: Transaction = {
+      ...transaction,
+      description,
+      amount: parseFloat(amount),
+      method,
+      bankId,
+      destinationBankId: method === 'transfer' ? destinationBankId : undefined,
+      category: category || (method === 'transfer' ? "Transferência" : "Geral"),
+      date: new Date().toISOString(), // Define para hoje
+      isCompleted: true,
+    };
+    onUpdate(updatedTransaction);
+    showSuccess("Transação efetivada com sucesso!");
+    onClose();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!transaction || !description || !amount || !bankId || !date) return;
     
-    if (method === 'transfer' && (!destinationBankId || bankId === destinationBankId)) {
-      showError("Selecione uma conta de destino diferente da origem.");
-      return;
-    }
-
     const updatedTransaction: Transaction = {
       ...transaction,
       description,
@@ -78,21 +92,35 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       date: new Date(date).toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
+      isCompleted: isCompleted || !isAfter(new Date(date), today),
     };
 
     onUpdate(updatedTransaction);
-    showSuccess(`Transação atualizada com sucesso!`);
+    showSuccess(`Transação atualizada!`);
     onClose();
   };
 
+  const isFuture = transaction && isAfter(parseISO(transaction.date), today) && !transaction.isCompleted;
+
   return (
     <Dialog open={!!transaction} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[450px] rounded-[2rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[450px] rounded-[2.5rem] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Editar Transação</DialogTitle>
+          <DialogTitle className="text-2xl font-black">Editar Transação</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
+          {isFuture && (
+            <Button 
+              type="button" 
+              onClick={handleEfetivar}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl py-6 gap-2 font-black shadow-lg shadow-emerald-200 dark:shadow-none"
+            >
+              <CheckCircle2 size={20} />
+              EFETIVAR AGORA
+            </Button>
+          )}
+
+          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl">
             {[
               { id: 'income', label: 'Receita', icon: ArrowUpCircle, color: 'bg-emerald-600' },
               { id: 'debit', label: 'Débito', icon: Wallet, color: 'bg-blue-600' },
@@ -103,84 +131,59 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
                 key={item.id}
                 type="button"
                 variant={method === item.id ? 'default' : 'ghost'}
-                className={`rounded-lg flex-col py-6 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
+                className={`rounded-xl flex-col py-6 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
                 onClick={() => setMethod(item.id as TransactionMethod)}
               >
                 <item.icon className="h-4 w-4" />
-                <span className="text-[9px]">{item.label}</span>
+                <span className="text-[9px] font-bold">{item.label}</span>
               </Button>
             ))}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-description">Descrição</Label>
+            <Label htmlFor="edit-description" className="font-bold text-xs uppercase tracking-widest text-slate-400">Descrição</Label>
             <Input
               id="edit-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="rounded-xl"
+              className="rounded-2xl h-12 bg-slate-50 dark:bg-slate-900 border-none"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-amount">Valor (R$)</Label>
+              <Label htmlFor="edit-amount" className="font-bold text-xs uppercase tracking-widest text-slate-400">Valor (R$)</Label>
               <Input
                 id="edit-amount"
                 type="number"
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="rounded-xl"
+                className="rounded-2xl h-12 bg-slate-50 dark:bg-slate-900 border-none"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-date">Data</Label>
+              <Label htmlFor="edit-date" className="font-bold text-xs uppercase tracking-widest text-slate-400">Data</Label>
               <Input
                 id="edit-date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="rounded-xl"
+                className="rounded-2xl h-12 bg-slate-50 dark:bg-slate-900 border-none"
                 required
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-category">Categoria</Label>
-            <div className="space-y-2">
-              <Input
-                id="edit-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="rounded-xl"
-                placeholder="Ex: Alimentação"
-              />
-              <div className="flex flex-wrap gap-2">
-                {categorySuggestions.slice(0, 4).map(cat => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setCategory(cat)}
-                    className="text-[10px] px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-primary hover:text-white transition-colors"
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>{method === 'credit' ? 'Cartão de Crédito' : 'Conta Bancária'}</Label>
+            <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">{method === 'credit' ? 'Cartão de Crédito' : 'Conta Bancária'}</Label>
             <Select onValueChange={setBankId} value={bankId} required>
-              <SelectTrigger className="rounded-xl">
+              <SelectTrigger className="rounded-2xl h-12 bg-slate-50 dark:bg-slate-900 border-none">
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-2xl">
                 {filteredBanks.map((bank) => (
                   <SelectItem key={bank.id} value={bank.id}>{bank.name}</SelectItem>
                 ))}
@@ -190,12 +193,12 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
 
           {method === 'transfer' && (
             <div className="space-y-2">
-              <Label>Conta de Destino</Label>
+              <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">Conta de Destino</Label>
               <Select onValueChange={setDestinationBankId} value={destinationBankId} required>
-                <SelectTrigger className="rounded-xl border-orange-200 bg-orange-50/30">
+                <SelectTrigger className="rounded-2xl h-12 bg-orange-50/30 dark:bg-orange-950/10 border-orange-100 dark:border-orange-900/30">
                   <SelectValue placeholder="Selecione o destino" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-2xl">
                   {banks.filter(b => b.type === 'account').map((bank) => (
                     <SelectItem key={bank.id} value={bank.id} disabled={bank.id === bankId}>
                       {bank.name}
@@ -206,41 +209,8 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
             </div>
           )}
 
-          <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-            {method === 'credit' && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-installments">Número de Parcelas</Label>
-                <Input
-                  id="edit-installments"
-                  type="number"
-                  min="1"
-                  max="48"
-                  value={installments}
-                  onChange={(e) => setInstallments(e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-            )}
-            <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
-              <Checkbox 
-                id="edit-recurring" 
-                checked={isRecurring} 
-                onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
-              />
-              <div className="grid gap-1.5 leading-none">
-                <label
-                  htmlFor="edit-recurring"
-                  className="text-sm font-bold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
-                >
-                  <Repeat size={14} className="text-primary" />
-                  Transação Recorrente
-                </label>
-              </div>
-            </div>
-          </div>
-
           <DialogFooter className="pt-4">
-            <Button type="submit" className="w-full rounded-xl py-6 text-lg">Salvar Alterações</Button>
+            <Button type="submit" className="w-full rounded-2xl py-6 text-lg font-black">Salvar Alterações</Button>
           </DialogFooter>
         </form>
       </DialogContent>

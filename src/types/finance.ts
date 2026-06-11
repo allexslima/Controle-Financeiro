@@ -23,5 +23,6 @@ export interface Transaction {
   destinationBankId?: string;
   installments?: number;
   isRecurring?: boolean;
-  groupId?: string; // Identificador para transações vinculadas
+  groupId?: string;
+  isCompleted?: boolean; // Novo campo para controle de efetivação
 }
