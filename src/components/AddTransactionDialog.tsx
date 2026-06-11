@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat } from "lucide-react";
+import { Plus, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format } from "date-fns";
@@ -108,13 +108,12 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     <Dialog open={open} onOpenChange={(val) => { setOpen(val); if(!val) resetForm(); }}>
       <DialogTrigger asChild>
         {variant === 'default' ? (
-          <Button className="gap-2 rounded-full px-8 py-6 text-lg font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
-            <PlusCircle className="h-5 w-5" />
+          <Button className="rounded-full px-8 py-6 text-lg font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
             Nova Transação
           </Button>
         ) : (
-          <Button className="h-14 w-14 rounded-full shadow-xl shadow-primary/40 flex items-center justify-center p-0 bg-primary text-white hover:scale-110 transition-transform">
-            <PlusCircle className="h-8 w-8" />
+          <Button className="h-16 w-16 rounded-full shadow-2xl shadow-primary/40 flex items-center justify-center p-0 bg-primary text-white hover:scale-110 transition-transform">
+            <Plus className="h-10 w-10" />
           </Button>
         )}
       </DialogTrigger>
