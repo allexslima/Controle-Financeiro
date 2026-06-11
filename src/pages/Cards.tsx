@@ -25,6 +25,24 @@ const CardsPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const creditCards = banks.filter(b => b.type === 'credit_card');
+  const today = startOfDay(new Date());
+
+  const getCompletedInvoice = (card: Bank) => {
+    const pendingTransactions = transactions.filter(t => 
+      (t.bankId === card.id || t.destinationBankId === card.id) &&
+      (!t.isCompleted && isAfter(parseISO(t.date), today))
+    );
+    
+    let balance = card.balance;
+    pendingTransactions.forEach(t => {
+      if (t.method === 'credit') {
+        balance -= t.amount;
+      } else if (t.method === 'transfer' && t.destinationBankId === card.id) {
+        balance += t.amount; // Reverte pagamento de fatura pendente
+      }
+    });
+    return balance;
+  };
 
   const getBillingMonth = (transaction: Transaction, bank: Bank | undefined) => {
     const tDate = parseISO(transaction.date);
@@ -42,13 +60,11 @@ const CardsPage = () => {
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, selectedCard, currentDate]);
 
-  const today = startOfDay(new Date());
-
   const summaryData = useMemo(() => {
     if (!selectedCard) return { completed: 0, future: 0 };
     
     const completed = filteredTransactions
-      .filter(t => !isAfter(parseISO(t.date), today))
+      .filter(t => t.isCompleted || !isAfter(parseISO(t.date), today))
       .reduce((acc, t) => {
         if (t.method === 'credit') return acc - t.amount;
         if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
@@ -56,7 +72,7 @@ const CardsPage = () => {
       }, 0);
 
     const future = filteredTransactions
-      .filter(t => isAfter(parseISO(t.date), today))
+      .filter(t => !t.isCompleted && isAfter(parseISO(t.date), today))
       .reduce((acc, t) => {
         if (t.method === 'credit') return acc - t.amount;
         if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
@@ -88,6 +104,7 @@ const CardsPage = () => {
                   <div key={card.id} className="flex flex-col">
                     <BankCard 
                       bank={card} 
+                      displayBalance={getCompletedInvoice(card)}
                       onRemove={removeBank} 
                       onEdit={setEditingBank}
                       onClick={setSelectedCard} 
@@ -128,9 +145,9 @@ const CardsPage = () => {
                   </div>
                   
                   <div className="mt-8">
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Total da Fatura</p>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Fatura Efetivada</p>
                     <p className="text-4xl font-black">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(grandTotal))}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(getCompletedInvoice(selectedCard)))}
                     </p>
                   </div>
 

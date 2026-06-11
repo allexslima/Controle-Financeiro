@@ -12,7 +12,7 @@ import AddTransactionDialog from "@/components/AddTransactionDialog";
 import AddBankDialog from "@/components/AddBankDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
-import { isSameMonth, parseISO, isAfter, endOfMonth, startOfDay } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Pencil } from "lucide-react";
 
@@ -24,6 +24,32 @@ const AccountsPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const accountBanks = banks.filter(b => b.type === 'account');
+  const today = startOfDay(new Date());
+
+  const getCompletedBalance = (bank: Bank) => {
+    // Filtra transações pendentes (não concluídas E data futura)
+    const pendingTransactions = transactions.filter(t => 
+      (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+      (!t.isCompleted && isAfter(parseISO(t.date), today))
+    );
+    
+    let balance = bank.balance;
+    // Reverte o impacto das transações pendentes no saldo total
+    pendingTransactions.forEach(t => {
+      const isOrigin = t.bankId === bank.id;
+      const isDest = t.destinationBankId === bank.id;
+      
+      if (t.method === 'income') {
+        balance -= t.amount;
+      } else if (t.method === 'transfer') {
+        if (isOrigin && !isDest) balance += t.amount;
+        if (!isOrigin && isDest) balance -= t.amount;
+      } else {
+        balance += t.amount; // debit ou credit
+      }
+    });
+    return balance;
+  };
 
   const filteredTransactions = useMemo(() => {
     if (!selectedBank) return [];
@@ -33,13 +59,11 @@ const AccountsPage = () => {
     ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, selectedBank, currentDate]);
 
-  const today = startOfDay(new Date());
-
   const summaryData = useMemo(() => {
     if (!selectedBank) return { completed: 0, future: 0 };
     
     const completed = filteredTransactions
-      .filter(t => !isAfter(parseISO(t.date), today))
+      .filter(t => t.isCompleted || !isAfter(parseISO(t.date), today))
       .reduce((acc, t) => {
         const isOrigin = t.bankId === selectedBank.id;
         const isDest = t.destinationBankId === selectedBank.id;
@@ -53,7 +77,7 @@ const AccountsPage = () => {
       }, 0);
 
     const future = filteredTransactions
-      .filter(t => isAfter(parseISO(t.date), today))
+      .filter(t => !t.isCompleted && isAfter(parseISO(t.date), today))
       .reduce((acc, t) => {
         const isOrigin = t.bankId === selectedBank.id;
         const isDest = t.destinationBankId === selectedBank.id;
@@ -91,6 +115,7 @@ const AccountsPage = () => {
                   <BankCard 
                     key={bank.id} 
                     bank={bank} 
+                    displayBalance={getCompletedBalance(bank)}
                     onRemove={removeBank} 
                     onEdit={setEditingBank}
                     onClick={setSelectedBank} 
@@ -121,9 +146,9 @@ const AccountsPage = () => {
                 </Button>
                 <h2 className="text-2xl font-black text-slate-900 dark:text-white">{selectedBank.name}</h2>
                 <div className="mt-4">
-                  <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Saldo Atual</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest">Saldo Efetivado</p>
                   <p className="text-4xl font-black text-slate-900 dark:text-white">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedBank.balance)}
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getCompletedBalance(selectedBank))}
                   </p>
                 </div>
               </div>

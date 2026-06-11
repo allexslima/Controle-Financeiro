@@ -8,16 +8,19 @@ import { Bank } from "@/types/finance";
 
 interface BankCardProps {
   bank: Bank;
+  displayBalance?: number; // Saldo opcional para exibir (Efetivado)
   onRemove: (id: string) => void;
   onEdit: (bank: Bank) => void;
   onClick: (bank: Bank) => void;
 }
 
-const BankCard = ({ bank, onRemove, onEdit, onClick }: BankCardProps) => {
+const BankCard = ({ bank, displayBalance, onRemove, onEdit, onClick }: BankCardProps) => {
+  const balanceToShow = displayBalance !== undefined ? displayBalance : bank.balance;
+
   const formattedBalance = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-  }).format(bank.balance);
+  }).format(balanceToShow);
 
   return (
     <Card 
@@ -63,10 +66,10 @@ const BankCard = ({ bank, onRemove, onEdit, onClick }: BankCardProps) => {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-slate-900 dark:text-white">{formattedBalance}</div>
+        <div className="text-2xl font-black text-slate-900 dark:text-white">{formattedBalance}</div>
         <div className="flex justify-between items-center mt-1">
-          <p className="text-xs text-muted-foreground">
-            {bank.type === 'account' ? 'Saldo Atual' : 'Fatura Atual'}
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            {bank.type === 'account' ? 'Saldo Efetivado' : 'Fatura Efetivada'}
           </p>
           {bank.type === 'credit_card' && bank.closingDay && (
             <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-slate-600 dark:text-slate-400">
