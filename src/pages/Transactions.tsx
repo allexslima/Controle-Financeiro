@@ -11,8 +11,10 @@ import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { isSameMonth, parseISO, isAfter, startOfDay, getDate, addMonths } from "date-fns";
 import { Transaction } from "@/types/finance";
+import { useNavigate } from "react-router-dom";
 
 const TransactionsPage = () => {
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const { transactions, banks, deleteTransaction, updateTransaction, addTransaction } = useFinance();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -69,7 +71,11 @@ const TransactionsPage = () => {
   const today = startOfDay(new Date());
 
   const handleEditRequest = (t: Transaction) => {
-    if (t.id.startsWith('group-')) return;
+    if (t.id.startsWith('group-')) {
+      // Se for uma fatura agrupada, redireciona para a página de cartões
+      navigate('/cards');
+      return;
+    }
     setEditingTransaction(t);
   };
 

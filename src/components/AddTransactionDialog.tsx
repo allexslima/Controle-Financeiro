@@ -72,6 +72,10 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
       return;
     }
 
+    // Correção de fuso horário: criar data local ao invés de UTC
+    const [year, month, day] = date.split('-').map(Number);
+    const localDate = new Date(year, month - 1, day, 12, 0, 0);
+
     const newTransaction: Transaction = {
       id: Math.random().toString(36).substr(2, 9),
       description: method === 'transfer' ? `Transferência: ${description}` : description,
@@ -80,7 +84,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
       bankId,
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
       category: category || (method === 'transfer' ? "Transferência" : "Geral"),
-      date: new Date(date).toISOString(),
+      date: localDate.toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
     };

@@ -16,8 +16,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { isSameMonth, parseISO, isAfter, startOfDay, endOfMonth, getDate, addMonths } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
 import { Transaction } from "@/types/finance";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const { banks, transactions, addBank, addTransaction, deleteTransaction, updateTransaction } = useFinance();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -73,7 +75,10 @@ const Index = () => {
   const endOfSelectedMonth = endOfMonth(currentDate);
 
   const handleEditRequest = (t: Transaction) => {
-    if (t.id.startsWith('group-')) return; // Não edita grupos no dashboard
+    if (t.id.startsWith('group-')) {
+      navigate('/cards');
+      return;
+    }
     setEditingTransaction(t);
   };
 
@@ -87,7 +92,7 @@ const Index = () => {
   };
 
   const handleDeleteRequest = (id: string) => {
-    if (id.startsWith('group-')) return; // Não deleta grupos no dashboard
+    if (id.startsWith('group-')) return;
     const t = transactions.find(item => item.id === id);
     if (t?.groupId) {
       setPendingAction({ type: 'delete', transaction: t });

@@ -81,6 +81,10 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
     e.preventDefault();
     if (!transaction || !description || !amount || !bankId || !date) return;
     
+    // Correção de fuso horário
+    const [year, month, day] = date.split('-').map(Number);
+    const localDate = new Date(year, month - 1, day, 12, 0, 0);
+
     const updatedTransaction: Transaction = {
       ...transaction,
       description,
@@ -89,10 +93,10 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       bankId,
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
       category: category || (method === 'transfer' ? "Transferência" : "Geral"),
-      date: new Date(date).toISOString(),
+      date: localDate.toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
-      isCompleted: isCompleted || !isAfter(new Date(date), today),
+      isCompleted: isCompleted || !isAfter(localDate, today),
     };
 
     onUpdate(updatedTransaction);
