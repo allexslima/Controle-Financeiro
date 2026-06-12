@@ -11,7 +11,7 @@ import TransactionList from "@/components/TransactionList";
 import EditTransactionDialog from "@/components/EditTransactionDialog";
 import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { TrendingUp, TrendingDown, CreditCard, Wallet, Sparkles } from "lucide-react";
+import { TrendingUp, TrendingDown, CreditCard, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { isSameMonth, parseISO, isAfter, startOfDay, endOfMonth, getDate, addMonths } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
@@ -31,23 +31,34 @@ const Index = () => {
     updatedData?: Transaction
   } | null>(null);
 
+  const today = startOfDay(new Date());
+  const endOfSelectedMonth = endOfMonth(currentDate);
+
+  // Função auxiliar para determinar o mês de fatura de uma transação de crédito
+  const getBillingMonth = (transaction: Transaction) => {
+    const tDate = parseISO(transaction.date);
+    if (transaction.method !== 'credit') return tDate;
+    
+    const bank = banks.find(b => b.id === transaction.bankId);
+    if (!bank || !bank.closingDay) return tDate;
+
+    if (getDate(tDate) > bank.closingDay) {
+      return addMonths(tDate, 1);
+    }
+    return tDate;
+  };
+
   const filteredTransactions = useMemo(() => {
+    // 1. Filtra transações que pertencem ao mês selecionado (ou fatura do mês)
     const baseTransactions = transactions.filter(t => {
-      const tDate = parseISO(t.date);
-      if (t.method !== 'credit') {
-        return isSameMonth(tDate, currentDate);
-      }
-      const bank = banks.find(b => b.id === t.bankId);
-      if (!bank || !bank.closingDay) return isSameMonth(tDate, currentDate);
-      let billingMonth = tDate;
-      if (getDate(tDate) > bank.closingDay) {
-        billingMonth = addMonths(tDate, 1);
-      }
+      const billingMonth = getBillingMonth(t);
       return isSameMonth(billingMonth, currentDate);
     });
 
-    // Agrupar transações de crédito
+    // 2. Separa transações que não são de crédito
     const nonCredit = baseTransactions.filter(t => t.method !== 'credit');
+
+    // 3. Agrupa transações de crédito por cartão para mostrar a "Fatura"
     const creditByBank = baseTransactions.filter(t => t.method === 'credit').reduce((acc, t) => {
       if (!acc[t.bankId]) acc[t.bankId] = { amount: 0, count: 0 };
       acc[t.bankId].amount += t.amount;
@@ -65,14 +76,13 @@ const Index = () => {
         category: 'Cartão de Crédito',
         date: currentDate.toISOString(),
         bankId: bankId,
+        isCompleted: false, // Faturas agrupadas são tratadas como pendentes até serem pagas (transferência)
       };
     });
 
+    // Retorna a lista combinada ordenada por data
     return [...nonCredit, ...groupedCredit].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, currentDate, banks]);
-
-  const today = startOfDay(new Date());
-  const endOfSelectedMonth = endOfMonth(currentDate);
 
   const handleEditRequest = (t: Transaction) => {
     if (t.id.startsWith('group-')) {
@@ -112,9 +122,12 @@ const Index = () => {
     setPendingAction(null);
   };
 
+  // Cálculo do Saldo Projetado (Contas - Despesas Futuras)
   const projectedBalance = useMemo(() => {
     const accounts = banks.filter(b => b.type === 'account');
     const currentTotal = accounts.reduce((acc, bank) => acc + bank.balance, 0);
+    
+    // Impacto de transações futuras após o mês selecionado
     const futureTransactions = transactions.filter(t => isAfter(parseISO(t.date), endOfSelectedMonth));
     const futureImpact = futureTransactions.reduce((acc, t) => {
       if (t.method === 'income') return acc + t.amount;
@@ -127,17 +140,15 @@ const Index = () => {
       }
       return acc - t.amount;
     }, 0);
+    
     return currentTotal - futureImpact;
   }, [banks, transactions, endOfSelectedMonth]);
 
-  const totalCredit = useMemo(() => 
+  // Soma das faturas APENAS do mês selecionado
+  const totalCreditMonth = useMemo(() => 
     transactions.filter(t => {
-      const tDate = parseISO(t.date);
       if (t.method !== 'credit') return false;
-      const bank = banks.find(b => b.id === t.bankId);
-      if (!bank || !bank.closingDay) return isSameMonth(tDate, currentDate);
-      let billingMonth = tDate;
-      if (getDate(tDate) > bank.closingDay) billingMonth = addMonths(tDate, 1);
+      const billingMonth = getBillingMonth(t);
       return isSameMonth(billingMonth, currentDate);
     }).reduce((acc, t) => acc + t.amount, 0), 
   [transactions, currentDate, banks]);
@@ -199,10 +210,10 @@ const Index = () => {
                   <div className="p-2 bg-purple-50 dark:bg-purple-950/30 text-purple-600 rounded-xl">
                     <CreditCard size={20} />
                   </div>
-                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Faturas Cartões</p>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Faturas do Mês</p>
                 </div>
                 <h3 className="text-3xl font-black text-slate-900 dark:text-white">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCredit)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCreditMonth)}
                 </h3>
               </CardContent>
             </Card>
@@ -238,10 +249,10 @@ const Index = () => {
 
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
-              <h2 className="text-2xl font-black text-slate-900 dark:text-white">Transações Recentes</h2>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white">Transações do Mês</h2>
             </div>
             <TransactionList 
-              transactions={filteredTransactions.slice(0, 10)} 
+              transactions={filteredTransactions} 
               banks={banks} 
               onEdit={handleEditRequest}
               onDelete={handleDeleteRequest}
