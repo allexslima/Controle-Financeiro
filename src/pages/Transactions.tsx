@@ -26,24 +26,28 @@ const TransactionsPage = () => {
     updatedData?: Transaction
   } | null>(null);
 
+  const today = startOfDay(new Date());
+
+  // Função auxiliar para determinar o mês de fatura de uma transação de crédito
+  const getBillingMonth = (transaction: Transaction) => {
+    const tDate = parseISO(transaction.date);
+    if (transaction.method !== 'credit') return tDate;
+    
+    const bank = banks.find(b => b.id === transaction.bankId);
+    if (!bank || !bank.closingDay) return tDate;
+
+    if (getDate(tDate) > bank.closingDay) {
+      return addMonths(tDate, 1);
+    }
+    return tDate;
+  };
+
   const filteredTransactions = useMemo(() => {
     const base = transactions.filter(t => {
-      const tDate = parseISO(t.date);
-      if (t.method !== 'credit') {
-        return isSameMonth(tDate, currentDate);
-      }
-      
-      const bank = banks.find(b => b.id === t.bankId);
-      if (!bank || !bank.closingDay) return isSameMonth(tDate, currentDate);
-
-      let billingMonth = tDate;
-      if (getDate(tDate) > bank.closingDay) {
-        billingMonth = addMonths(tDate, 1);
-      }
+      const billingMonth = getBillingMonth(t);
       return isSameMonth(billingMonth, currentDate);
     });
 
-    // Agrupar transações de crédito por cartão
     const nonCredit = base.filter(t => t.method !== 'credit');
     const creditByBank = base.filter(t => t.method === 'credit').reduce((acc, t) => {
       if (!acc[t.bankId]) acc[t.bankId] = { amount: 0, count: 0 };
@@ -62,17 +66,15 @@ const TransactionsPage = () => {
         category: 'Cartão de Crédito',
         date: currentDate.toISOString(),
         bankId: bankId,
+        isCompleted: false,
       };
     });
 
     return [...nonCredit, ...groupedCredit].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, currentDate, banks]);
 
-  const today = startOfDay(new Date());
-
   const handleEditRequest = (t: Transaction) => {
     if (t.id.startsWith('group-')) {
-      // Se for uma fatura agrupada, redireciona para a página de cartões
       navigate('/cards');
       return;
     }
@@ -110,23 +112,25 @@ const TransactionsPage = () => {
     setPendingAction(null);
   };
 
-  // Cálculo do resumo baseado nas transações originais (não agrupadas) para precisão
   const summaryData = useMemo(() => {
     const base = transactions.filter(t => {
-      const tDate = parseISO(t.date);
-      if (t.method !== 'credit') return isSameMonth(tDate, currentDate);
-      const bank = banks.find(b => b.id === t.bankId);
-      if (!bank || !bank.closingDay) return isSameMonth(tDate, currentDate);
-      let billingMonth = tDate;
-      if (getDate(tDate) > bank.closingDay) billingMonth = addMonths(tDate, 1);
+      const billingMonth = getBillingMonth(t);
       return isSameMonth(billingMonth, currentDate);
     });
 
-    const completed = base.filter(t => !isAfter(parseISO(t.date), today))
-      .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0);
+    const completed = base.filter(t => t.isCompleted || !isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => {
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') return acc;
+        return acc - t.amount;
+      }, 0);
     
-    const future = base.filter(t => isAfter(parseISO(t.date), today))
-      .reduce((acc, t) => t.method === 'income' ? acc + t.amount : acc - t.amount, 0);
+    const future = base.filter(t => !t.isCompleted && isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => {
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') return acc;
+        return acc - t.amount;
+      }, 0);
 
     return { completed, future };
   }, [transactions, currentDate, banks, today]);

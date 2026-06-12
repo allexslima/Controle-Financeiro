@@ -49,16 +49,13 @@ const Index = () => {
   };
 
   const filteredTransactions = useMemo(() => {
-    // 1. Filtra transações que pertencem ao mês selecionado (ou fatura do mês)
     const baseTransactions = transactions.filter(t => {
       const billingMonth = getBillingMonth(t);
       return isSameMonth(billingMonth, currentDate);
     });
 
-    // 2. Separa transações que não são de crédito
     const nonCredit = baseTransactions.filter(t => t.method !== 'credit');
 
-    // 3. Agrupa transações de crédito por cartão para mostrar a "Fatura"
     const creditByBank = baseTransactions.filter(t => t.method === 'credit').reduce((acc, t) => {
       if (!acc[t.bankId]) acc[t.bankId] = { amount: 0, count: 0 };
       acc[t.bankId].amount += t.amount;
@@ -76,11 +73,10 @@ const Index = () => {
         category: 'Cartão de Crédito',
         date: currentDate.toISOString(),
         bankId: bankId,
-        isCompleted: false, // Faturas agrupadas são tratadas como pendentes até serem pagas (transferência)
+        isCompleted: false,
       };
     });
 
-    // Retorna a lista combinada ordenada por data
     return [...nonCredit, ...groupedCredit].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, currentDate, banks]);
 
@@ -122,29 +118,38 @@ const Index = () => {
     setPendingAction(null);
   };
 
+  const summaryData = useMemo(() => {
+    const base = transactions.filter(t => {
+      const billingMonth = getBillingMonth(t);
+      return isSameMonth(billingMonth, currentDate);
+    });
+
+    const completed = base.filter(t => t.isCompleted || !isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => {
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') return acc; // Transferência não afeta o saldo líquido do mês
+        return acc - t.amount;
+      }, 0);
+    
+    const future = base.filter(t => !t.isCompleted && isAfter(parseISO(t.date), today))
+      .reduce((acc, t) => {
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') return acc;
+        return acc - t.amount;
+      }, 0);
+
+    return { completed, future };
+  }, [transactions, currentDate, banks, today]);
+
+  const grandTotal = summaryData.completed + summaryData.future;
+
   // Cálculo do Saldo Projetado (Contas - Despesas Futuras)
   const projectedBalance = useMemo(() => {
     const accounts = banks.filter(b => b.type === 'account');
     const currentTotal = accounts.reduce((acc, bank) => acc + bank.balance, 0);
-    
-    // Impacto de transações futuras após o mês selecionado
-    const futureTransactions = transactions.filter(t => isAfter(parseISO(t.date), endOfSelectedMonth));
-    const futureImpact = futureTransactions.reduce((acc, t) => {
-      if (t.method === 'income') return acc + t.amount;
-      if (t.method === 'transfer') {
-        const isFromAccount = accounts.some(a => a.id === t.bankId);
-        const isToAccount = accounts.some(a => a.id === t.destinationBankId);
-        if (isFromAccount && !isToAccount) return acc - t.amount;
-        if (!isFromAccount && isToAccount) return acc + t.amount;
-        return acc;
-      }
-      return acc - t.amount;
-    }, 0);
-    
-    return currentTotal - futureImpact;
-  }, [banks, transactions, endOfSelectedMonth]);
+    return currentTotal;
+  }, [banks]);
 
-  // Soma das faturas APENAS do mês selecionado
   const totalCreditMonth = useMemo(() => 
     transactions.filter(t => {
       if (t.method !== 'credit') return false;
@@ -196,7 +201,7 @@ const Index = () => {
                   <div className="p-2 bg-white/10 rounded-xl">
                     <Wallet size={20} />
                   </div>
-                  <p className="font-bold text-[10px] uppercase tracking-widest">Saldo Final do Mês</p>
+                  <p className="font-bold text-[10px] uppercase tracking-widest">Saldo Atual Contas</p>
                 </div>
                 <h2 className="text-3xl font-black">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectedBalance)}
@@ -257,6 +262,27 @@ const Index = () => {
               onEdit={handleEditRequest}
               onDelete={handleDeleteRequest}
             />
+
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
+              <div className="flex justify-between text-sm font-medium text-slate-500">
+                <span>Valores Efetuados (Mês)</span>
+                <span className={summaryData.completed >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.completed)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-medium text-slate-500">
+                <span>Valores Futuros (Mês)</span>
+                <span className={summaryData.future >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
+                </span>
+              </div>
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <span className="text-lg font-black text-slate-900 dark:text-white">Total do Mês</span>
+                <span className={`text-2xl font-black ${grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
+                </span>
+              </div>
+            </div>
           </div>
 
           <EditTransactionDialog 
