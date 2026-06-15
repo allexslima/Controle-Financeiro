@@ -9,7 +9,7 @@ import EditTransactionDialog from "@/components/EditTransactionDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
-import { isSameMonth, parseISO, isAfter, startOfDay, getDate, addMonths } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, getDate, addMonths, startOfMonth } from "date-fns";
 import { Transaction } from "@/types/finance";
 import { useNavigate } from "react-router-dom";
 
@@ -28,7 +28,6 @@ const TransactionsPage = () => {
 
   const today = startOfDay(new Date());
 
-  // Função auxiliar para determinar o mês de fatura de uma transação de crédito
   const getBillingMonth = (transaction: Transaction) => {
     const tDate = parseISO(transaction.date);
     if (transaction.method !== 'credit') return tDate;
@@ -132,10 +131,26 @@ const TransactionsPage = () => {
         return acc - t.amount;
       }, 0);
 
-    return { completed, future };
+    // Cálculo do Saldo do Mês Anterior
+    const currentNet = banks.reduce((acc, b) => {
+      if (b.type === 'account') return acc + b.balance;
+      return acc - b.balance;
+    }, 0);
+
+    const currentAndFutureImpact = transactions.filter(t => 
+      isSameMonth(getBillingMonth(t), currentDate) || isAfter(getBillingMonth(t), currentDate)
+    ).reduce((acc, t) => {
+      if (t.method === 'income') return acc + t.amount;
+      if (t.method === 'transfer') return acc;
+      return acc - t.amount;
+    }, 0);
+
+    const previousBalance = currentNet - currentAndFutureImpact;
+
+    return { completed, future, previousBalance };
   }, [transactions, currentDate, banks, today]);
 
-  const grandTotal = summaryData.completed + summaryData.future;
+  const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -171,8 +186,14 @@ const TransactionsPage = () => {
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
               </span>
             </div>
+            <div className="flex justify-between text-sm font-medium text-slate-500">
+              <span>Saldo Mês Anterior</span>
+              <span className={summaryData.previousBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.previousBalance)}
+              </span>
+            </div>
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-              <span className="text-lg font-black text-slate-900 dark:text-white">Total do Mês</span>
+              <span className="text-lg font-black text-slate-900 dark:text-white">Total Geral</span>
               <span className={`text-2xl font-black ${grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
               </span>
