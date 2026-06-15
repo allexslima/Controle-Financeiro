@@ -13,7 +13,7 @@ import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { isSameMonth, parseISO, isAfter, startOfDay, getDate, addMonths, startOfMonth } from "date-fns";
+import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
 import { Transaction } from "@/types/finance";
 import { useNavigate } from "react-router-dom";
@@ -30,8 +30,6 @@ const Index = () => {
     transaction: Transaction,
     updatedData?: Transaction
   } | null>(null);
-
-  const today = startOfDay(new Date());
 
   const getBillingMonth = (transaction: Transaction) => {
     const tDate = parseISO(transaction.date);
@@ -117,15 +115,14 @@ const Index = () => {
   };
 
   const summaryData = useMemo(() => {
-    const base = transactions.filter(t => {
-      const billingMonth = getBillingMonth(t);
-      return isSameMonth(billingMonth, currentDate);
-    });
+    const monthStart = startOfMonth(currentDate);
+    
+    const base = transactions.filter(t => isSameMonth(getBillingMonth(t), currentDate));
 
     const completed = base.filter(t => t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') return acc;
+        if (t.method === 'transfer') return acc; // Transferências entre contas são neutras no global
         return acc - t.amount;
       }, 0);
     
@@ -136,21 +133,14 @@ const Index = () => {
         return acc - t.amount;
       }, 0);
 
-    // Cálculo do Saldo do Mês Anterior
-    const currentNet = banks.reduce((acc, b) => {
-      if (b.type === 'account') return acc + b.balance;
-      return acc - b.balance;
-    }, 0);
-
-    const currentAndFutureImpact = transactions.filter(t => 
-      isSameMonth(getBillingMonth(t), currentDate) || isAfter(getBillingMonth(t), currentDate)
-    ).reduce((acc, t) => {
-      if (t.method === 'income') return acc + t.amount;
-      if (t.method === 'transfer') return acc;
-      return acc - t.amount;
-    }, 0);
-
-    const previousBalance = currentNet - currentAndFutureImpact;
+    // Saldo do Mês Anterior: Soma de todas as transações antes do mês atual
+    const previousBalance = transactions
+      .filter(t => isBefore(getBillingMonth(t), monthStart))
+      .reduce((acc, t) => {
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') return acc;
+        return acc - t.amount;
+      }, 0);
 
     return { completed, future, previousBalance };
   }, [transactions, currentDate, banks]);

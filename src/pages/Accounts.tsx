@@ -12,7 +12,7 @@ import AddTransactionDialog from "@/components/AddTransactionDialog";
 import AddBankDialog from "@/components/AddBankDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
-import { isSameMonth, parseISO, isAfter, startOfDay } from "date-fns";
+import { isSameMonth, parseISO, isBefore, startOfMonth } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Pencil } from "lucide-react";
 
@@ -59,6 +59,8 @@ const AccountsPage = () => {
   const summaryData = useMemo(() => {
     if (!selectedBank) return { completed: 0, future: 0, previousBalance: 0 };
     
+    const monthStart = startOfMonth(currentDate);
+
     const completed = filteredTransactions
       .filter(t => t.isCompleted)
       .reduce((acc, t) => {
@@ -87,23 +89,23 @@ const AccountsPage = () => {
         return acc - t.amount;
       }, 0);
 
-    // Saldo anterior específico desta conta
-    const currentImpact = transactions.filter(t => 
-      (t.bankId === selectedBank.id || t.destinationBankId === selectedBank.id) &&
-      (isSameMonth(parseISO(t.date), currentDate) || isAfter(parseISO(t.date), currentDate))
-    ).reduce((acc, t) => {
-      const isOrigin = t.bankId === selectedBank.id;
-      const isDest = t.destinationBankId === selectedBank.id;
-      if (t.method === 'income') return acc + t.amount;
-      if (t.method === 'transfer') {
-        if (isOrigin && !isDest) return acc - t.amount;
-        if (!isOrigin && isDest) return acc + t.amount;
-        return acc;
-      }
-      return acc - t.amount;
-    }, 0);
-
-    const previousBalance = selectedBank.balance - currentImpact;
+    // Saldo anterior específico desta conta baseado apenas em transações
+    const previousBalance = transactions
+      .filter(t => 
+        (t.bankId === selectedBank.id || t.destinationBankId === selectedBank.id) &&
+        isBefore(parseISO(t.date), monthStart)
+      )
+      .reduce((acc, t) => {
+        const isOrigin = t.bankId === selectedBank.id;
+        const isDest = t.destinationBankId === selectedBank.id;
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') {
+          if (isOrigin && !isDest) return acc - t.amount;
+          if (!isOrigin && isDest) return acc + t.amount;
+          return acc;
+        }
+        return acc - t.amount;
+      }, 0);
 
     return { completed, future, previousBalance };
   }, [filteredTransactions, selectedBank, transactions, currentDate]);
