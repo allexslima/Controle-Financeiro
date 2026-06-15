@@ -19,6 +19,7 @@ interface FinanceContextType {
   addTransaction: (transaction: Transaction) => void;
   deleteTransaction: (id: string, mode?: 'single' | 'future' | 'all') => void;
   updateTransaction: (transaction: Transaction, mode?: 'single' | 'future') => void;
+  reorderTransactions: (newTransactions: Transaction[]) => void;
   undo: () => void;
   canUndo: boolean;
 }
@@ -123,6 +124,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         groupId,
         description: count > 1 && t.installments ? `${t.description} (${i + 1}/${count})` : t.description,
         date: installmentDate.toISOString(),
+        order: Date.now() + i, // Garante uma ordem inicial baseada no tempo
       };
       newTransactions.push(installmentTransaction);
       updatedBanks = applyTransactionToBalance(installmentTransaction, false, updatedBanks);
@@ -188,7 +190,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
             category: updated.category,
             bankId: updated.bankId,
             destinationBankId: updated.destinationBankId,
-            method: updated.method
+            method: updated.method,
+            isCompleted: updated.isCompleted
           };
           updatedBanks = applyTransactionToBalance(newT, false, updatedBanks);
           return newT;
@@ -202,9 +205,18 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     showSuccess("Transação atualizada!");
   };
 
+  const reorderTransactions = (newTransactions: Transaction[]) => {
+    // Atualiza apenas as transações que estão na lista fornecida, mantendo as outras
+    const updatedTransactions = transactions.map(t => {
+      const found = newTransactions.find(nt => nt.id === t.id);
+      return found ? found : t;
+    });
+    setTransactions(updatedTransactions);
+  };
+
   return (
     <FinanceContext.Provider value={{ 
-      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction, undo, canUndo: history.length > 0
+      banks, transactions, addBank, removeBank, updateBank, addTransaction, deleteTransaction, updateTransaction, reorderTransactions, undo, canUndo: history.length > 0
     }}>
       {children}
     </FinanceContext.Provider>
