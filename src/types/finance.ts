@@ -24,6 +24,5 @@ export interface Transaction {
   installments?: number;
   isRecurring?: boolean;
   groupId?: string;
-  isCompleted?: boolean;
-  order?: number; // Campo para ordenação manual
+  isCompleted?: boolean; // Novo campo para controle de efetivação
 }
