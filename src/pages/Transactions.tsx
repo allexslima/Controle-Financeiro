@@ -117,14 +117,14 @@ const TransactionsPage = () => {
       return isSameMonth(billingMonth, currentDate);
     });
 
-    const completed = base.filter(t => t.isCompleted || !isAfter(parseISO(t.date), today))
+    const completed = base.filter(t => t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'income') return acc + t.amount;
         if (t.method === 'transfer') return acc;
         return acc - t.amount;
       }, 0);
     
-    const future = base.filter(t => !t.isCompleted && isAfter(parseISO(t.date), today))
+    const future = base.filter(t => !t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'income') return acc + t.amount;
         if (t.method === 'transfer') return acc;
@@ -148,7 +148,7 @@ const TransactionsPage = () => {
     const previousBalance = currentNet - currentAndFutureImpact;
 
     return { completed, future, previousBalance };
-  }, [transactions, currentDate, banks, today]);
+  }, [transactions, currentDate, banks]);
 
   const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
 

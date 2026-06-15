@@ -25,12 +25,11 @@ const CardsPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const creditCards = banks.filter(b => b.type === 'credit_card');
-  const today = startOfDay(new Date());
 
   const getCompletedInvoice = (card: Bank) => {
     const pendingTransactions = transactions.filter(t => 
       (t.bankId === card.id || t.destinationBankId === card.id) &&
-      (!t.isCompleted && isAfter(parseISO(t.date), today))
+      !t.isCompleted
     );
     
     let balance = card.balance;
@@ -38,7 +37,7 @@ const CardsPage = () => {
       if (t.method === 'credit') {
         balance -= t.amount;
       } else if (t.method === 'transfer' && t.destinationBankId === card.id) {
-        balance += t.amount; // Reverte pagamento de fatura pendente
+        balance += t.amount;
       }
     });
     return balance;
@@ -61,10 +60,10 @@ const CardsPage = () => {
   }, [transactions, selectedCard, currentDate]);
 
   const summaryData = useMemo(() => {
-    if (!selectedCard) return { completed: 0, future: 0 };
+    if (!selectedCard) return { completed: 0, future: 0, previousBalance: 0 };
     
     const completed = filteredTransactions
-      .filter(t => t.isCompleted || !isAfter(parseISO(t.date), today))
+      .filter(t => t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'credit') return acc - t.amount;
         if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
@@ -72,17 +71,30 @@ const CardsPage = () => {
       }, 0);
 
     const future = filteredTransactions
-      .filter(t => !t.isCompleted && isAfter(parseISO(t.date), today))
+      .filter(t => !t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'credit') return acc - t.amount;
         if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
         return acc;
       }, 0);
 
-    return { completed, future };
-  }, [filteredTransactions, today, selectedCard]);
+    // Saldo anterior específico deste cartão
+    const currentImpact = transactions.filter(t => {
+      if (t.bankId !== selectedCard.id && t.destinationBankId !== selectedCard.id) return false;
+      const billingMonth = getBillingMonth(t, selectedCard);
+      return isSameMonth(billingMonth, currentDate) || isAfter(billingMonth, currentDate);
+    }).reduce((acc, t) => {
+      if (t.method === 'credit') return acc - t.amount;
+      if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
+      return acc;
+    }, 0);
 
-  const grandTotal = summaryData.completed + summaryData.future;
+    const previousBalance = selectedCard.balance - currentImpact;
+
+    return { completed, future, previousBalance };
+  }, [filteredTransactions, selectedCard, transactions, currentDate]);
+
+  const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -178,8 +190,14 @@ const CardsPage = () => {
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
                   </span>
                 </div>
+                <div className="flex justify-between text-sm font-medium text-slate-500">
+                  <span>Saldo Mês Anterior</span>
+                  <span className={summaryData.previousBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.previousBalance)}
+                  </span>
+                </div>
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                  <span className="text-lg font-black text-slate-900 dark:text-white">Total do Mês</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">Total Geral</span>
                   <span className={`text-2xl font-black ${grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
                   </span>

@@ -13,7 +13,7 @@ import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { isSameMonth, parseISO, isAfter, startOfDay, endOfMonth, getDate, addMonths, isBefore, startOfMonth } from "date-fns";
+import { isSameMonth, parseISO, isAfter, startOfDay, getDate, addMonths, startOfMonth } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
 import { Transaction } from "@/types/finance";
 import { useNavigate } from "react-router-dom";
@@ -122,14 +122,14 @@ const Index = () => {
       return isSameMonth(billingMonth, currentDate);
     });
 
-    const completed = base.filter(t => t.isCompleted || !isAfter(parseISO(t.date), today))
+    const completed = base.filter(t => t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'income') return acc + t.amount;
         if (t.method === 'transfer') return acc;
         return acc - t.amount;
       }, 0);
     
-    const future = base.filter(t => !t.isCompleted && isAfter(parseISO(t.date), today))
+    const future = base.filter(t => !t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'income') return acc + t.amount;
         if (t.method === 'transfer') return acc;
@@ -137,7 +137,6 @@ const Index = () => {
       }, 0);
 
     // Cálculo do Saldo do Mês Anterior
-    const startOfCurrent = startOfMonth(currentDate);
     const currentNet = banks.reduce((acc, b) => {
       if (b.type === 'account') return acc + b.balance;
       return acc - b.balance;
@@ -154,7 +153,7 @@ const Index = () => {
     const previousBalance = currentNet - currentAndFutureImpact;
 
     return { completed, future, previousBalance };
-  }, [transactions, currentDate, banks, today]);
+  }, [transactions, currentDate, banks]);
 
   const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
 
