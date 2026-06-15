@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import BankCard from "@/components/BankCard";
-import TransactionList from "@/components/TransactionList";
+import TransactionList from "@/components/TransactionList.tsx";
 import MonthNavigator from "@/components/MonthNavigator";
 import EditBankDialog from "@/components/EditBankDialog";
 import EditTransactionDialog from "@/components/EditTransactionDialog";
@@ -60,7 +60,7 @@ const CardsPage = () => {
   }, [transactions, selectedCard, currentDate]);
 
   const summaryData = useMemo(() => {
-    if (!selectedCard) return { completed: 0, future: 0, previousBalance: 0 };
+    if (!selectedCard) return { completed: 0, future: 0 };
     
     const completed = filteredTransactions
       .filter(t => t.isCompleted)
@@ -78,23 +78,10 @@ const CardsPage = () => {
         return acc;
       }, 0);
 
-    // Saldo anterior específico deste cartão
-    const currentImpact = transactions.filter(t => {
-      if (t.bankId !== selectedCard.id && t.destinationBankId !== selectedCard.id) return false;
-      const billingMonth = getBillingMonth(t, selectedCard);
-      return isSameMonth(billingMonth, currentDate) || isAfter(billingMonth, currentDate);
-    }).reduce((acc, t) => {
-      if (t.method === 'credit') return acc - t.amount;
-      if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
-      return acc;
-    }, 0);
+    return { completed, future };
+  }, [filteredTransactions, selectedCard]);
 
-    const previousBalance = selectedCard.balance - currentImpact;
-
-    return { completed, future, previousBalance };
-  }, [filteredTransactions, selectedCard, transactions, currentDate]);
-
-  const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
+  const grandTotal = summaryData.completed + summaryData.future;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -188,12 +175,6 @@ const CardsPage = () => {
                   <span>Valores Futuros (Mês)</span>
                   <span className={summaryData.future >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm font-medium text-slate-500">
-                  <span>Saldo Mês Anterior</span>
-                  <span className={summaryData.previousBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.previousBalance)}
                   </span>
                 </div>
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
