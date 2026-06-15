@@ -136,20 +136,21 @@ const Index = () => {
         return acc - t.amount;
       }, 0);
 
-    // Cálculo do Saldo do Mês Anterior (Apenas Contas Correntes)
-    const currentNetAccounts = banks.filter(b => b.type === 'account').reduce((acc, b) => acc + b.balance, 0);
+    // Cálculo do Saldo do Mês Anterior
+    const currentNet = banks.reduce((acc, b) => {
+      if (b.type === 'account') return acc + b.balance;
+      return acc - b.balance;
+    }, 0);
 
-    const currentAndFutureImpactAccounts = transactions.filter(t => {
-      const billingMonth = getBillingMonth(t);
-      const isAccountImpact = t.method !== 'credit'; // Crédito não afeta saldo de conta diretamente até ser pago
-      return isAccountImpact && (isSameMonth(billingMonth, currentDate) || isAfter(billingMonth, currentDate));
-    }).reduce((acc, t) => {
+    const currentAndFutureImpact = transactions.filter(t => 
+      isSameMonth(getBillingMonth(t), currentDate) || isAfter(getBillingMonth(t), currentDate)
+    ).reduce((acc, t) => {
       if (t.method === 'income') return acc + t.amount;
       if (t.method === 'transfer') return acc;
       return acc - t.amount;
     }, 0);
 
-    const previousBalance = currentNetAccounts - currentAndFutureImpactAccounts;
+    const previousBalance = currentNet - currentAndFutureImpact;
 
     return { completed, future, previousBalance };
   }, [transactions, currentDate, banks]);
