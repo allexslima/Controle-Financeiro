@@ -24,13 +24,12 @@ const AccountsPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const accountBanks = banks.filter(b => b.type === 'account');
-  const today = startOfDay(new Date());
 
   const getCompletedBalance = (bank: Bank) => {
-    // Filtra transações pendentes (não concluídas E data futura)
+    // Filtra transações que NÃO estão marcadas como completadas
     const pendingTransactions = transactions.filter(t => 
       (t.bankId === bank.id || t.destinationBankId === bank.id) &&
-      (!t.isCompleted && isAfter(parseISO(t.date), today))
+      !t.isCompleted
     );
     
     let balance = bank.balance;
@@ -63,7 +62,7 @@ const AccountsPage = () => {
     if (!selectedBank) return { completed: 0, future: 0 };
     
     const completed = filteredTransactions
-      .filter(t => t.isCompleted || !isAfter(parseISO(t.date), today))
+      .filter(t => t.isCompleted)
       .reduce((acc, t) => {
         const isOrigin = t.bankId === selectedBank.id;
         const isDest = t.destinationBankId === selectedBank.id;
@@ -77,7 +76,7 @@ const AccountsPage = () => {
       }, 0);
 
     const future = filteredTransactions
-      .filter(t => !t.isCompleted && isAfter(parseISO(t.date), today))
+      .filter(t => !t.isCompleted)
       .reduce((acc, t) => {
         const isOrigin = t.bankId === selectedBank.id;
         const isDest = t.destinationBankId === selectedBank.id;
@@ -91,7 +90,7 @@ const AccountsPage = () => {
       }, 0);
 
     return { completed, future };
-  }, [filteredTransactions, today, selectedBank]);
+  }, [filteredTransactions, selectedBank]);
 
   const grandTotal = summaryData.completed + summaryData.future;
 

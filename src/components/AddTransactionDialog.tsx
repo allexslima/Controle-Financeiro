@@ -14,10 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat, CheckCircle2 } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
-import { format } from "date-fns";
+import { format, isAfter, startOfDay, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 
 interface AddTransactionDialogProps {
@@ -37,19 +38,22 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [installments, setInstallments] = useState("1");
   const [isRecurring, setIsRecurring] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(true);
   
   const [errors, setErrors] = useState<Record<string, boolean>>({});
+
+  const today = startOfDay(new Date());
 
   const filteredBanks = banks.filter(bank => {
     if (method === 'credit') return bank.type === 'credit_card';
     return bank.type === 'account';
   });
 
+  // Atualiza o status de efetivada automaticamente baseado na data, mas permite alteração manual
   useEffect(() => {
-    if (bankId && !filteredBanks.find(b => b.id === bankId)) {
-      setBankId("");
-    }
-  }, [method, filteredBanks, bankId]);
+    const selectedDate = parseISO(date);
+    setIsCompleted(!isAfter(selectedDate, today));
+  }, [date]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,13 +70,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
       showError("Por favor, preencha todos os campos obrigatórios.");
       return;
     }
-    
-    if (method === 'transfer' && bankId === destinationBankId) {
-      showError("Selecione uma conta de destino diferente da origem.");
-      return;
-    }
 
-    // Correção de fuso horário: criar data local ao invés de UTC
     const [year, month, day] = date.split('-').map(Number);
     const localDate = new Date(year, month - 1, day, 12, 0, 0);
 
@@ -87,6 +85,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
       date: localDate.toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
+      isCompleted: isCompleted,
     };
 
     onAdd(newTransaction);
@@ -105,6 +104,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     setDate(format(new Date(), "yyyy-MM-dd"));
     setInstallments("1");
     setIsRecurring(false);
+    setIsCompleted(true);
     setErrors({});
   };
 
@@ -126,6 +126,23 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
           <DialogTitle className="text-2xl font-bold">Nova Movimentação</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className={cn("p-2 rounded-lg", isCompleted ? "bg-emerald-100 text-emerald-600" : "bg-slate-200 text-slate-500")}>
+                <CheckCircle2 size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Transação Efetivada?</p>
+                <p className="text-[10px] text-slate-500">Define se o valor já saiu/entrou na conta</p>
+              </div>
+            </div>
+            <Switch 
+              checked={isCompleted} 
+              onCheckedChange={setIsCompleted}
+              className="data-[state=checked]:bg-emerald-500"
+            />
+          </div>
+
           <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
             {[
               { id: 'income', label: 'Receita', icon: ArrowUpCircle, color: 'bg-emerald-600' },
@@ -180,17 +197,6 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
                 className={cn("rounded-xl", errors.date && "border-destructive")}
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="category">Categoria</Label>
-            <Input
-              id="category"
-              placeholder="Ex: Alimentação"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="rounded-xl"
-            />
           </div>
 
           <div className="space-y-2">

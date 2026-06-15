@@ -13,10 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat, CheckCircle2 } from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format, parseISO, isAfter, startOfDay } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface EditTransactionDialogProps {
   transaction: Transaction | null;
@@ -59,29 +61,10 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
     return bank.type === 'account';
   });
 
-  const handleEfetivar = () => {
-    if (!transaction) return;
-    const updatedTransaction: Transaction = {
-      ...transaction,
-      description,
-      amount: parseFloat(amount),
-      method,
-      bankId,
-      destinationBankId: method === 'transfer' ? destinationBankId : undefined,
-      category: category || (method === 'transfer' ? "Transferência" : "Geral"),
-      date: new Date().toISOString(), // Define para hoje
-      isCompleted: true,
-    };
-    onUpdate(updatedTransaction);
-    showSuccess("Transação efetivada com sucesso!");
-    onClose();
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!transaction || !description || !amount || !bankId || !date) return;
     
-    // Correção de fuso horário
     const [year, month, day] = date.split('-').map(Number);
     const localDate = new Date(year, month - 1, day, 12, 0, 0);
 
@@ -96,15 +79,13 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       date: localDate.toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
-      isCompleted: isCompleted || !isAfter(localDate, today),
+      isCompleted: isCompleted,
     };
 
     onUpdate(updatedTransaction);
     showSuccess(`Transação atualizada!`);
     onClose();
   };
-
-  const isFuture = transaction && isAfter(parseISO(transaction.date), today) && !transaction.isCompleted;
 
   return (
     <Dialog open={!!transaction} onOpenChange={(open) => !open && onClose()}>
@@ -113,16 +94,22 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
           <DialogTitle className="text-2xl font-black">Editar Transação</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {isFuture && (
-            <Button 
-              type="button" 
-              onClick={handleEfetivar}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl py-6 gap-2 font-black shadow-lg shadow-emerald-200 dark:shadow-none"
-            >
-              <CheckCircle2 size={20} />
-              EFETIVAR AGORA
-            </Button>
-          )}
+          <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className={cn("p-2 rounded-lg", isCompleted ? "bg-emerald-100 text-emerald-600" : "bg-slate-200 text-slate-500")}>
+                <CheckCircle2 size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Transação Efetivada?</p>
+                <p className="text-[10px] text-slate-500">Define se o valor já saiu/entrou na conta</p>
+              </div>
+            </div>
+            <Switch 
+              checked={isCompleted} 
+              onCheckedChange={setIsCompleted}
+              className="data-[state=checked]:bg-emerald-500"
+            />
+          </div>
 
           <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl">
             {[
