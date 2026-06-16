@@ -2,27 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction, Bank } from "@/types/finance";
-import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2, Search, CheckCircle2, Clock } from "lucide-react";
-import { format, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import SwipeableTransactionItem from "./SwipeableTransactionItem";
-import { cn } from "@/lib/utils";
-
-interface TransactionListProps {
-  transactions: Transaction[];
-  banks: Bank[];
-  onEdit: (transaction: Transaction) => void;
-  onDelete: (id: string) => void;
-}
-
-const<dyad-write path="src/components/TransactionList.tsx" description="Ajustando a lógica de separação para depender exclusivamente do status isCompleted.">
-"use client";
-
-import React, { useState, useMemo } from 'react';
-import { Transaction, Bank } from "@/types/finance";
-import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2, Search, CheckCircle2, Clock } from "lucide-react";
+import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Search, CheckCircle2, Clock } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -58,7 +38,6 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
            t.amount.toString().includes(search);
   });
 
-  // Lógica de separação: Depende EXCLUSIVAMENTE do campo isCompleted
   const splitTransactions = useMemo(() => {
     const completed = filteredTransactions.filter(t => t.isCompleted === true);
     const pending = filteredTransactions.filter(t => t.isCompleted !== true);
@@ -149,19 +128,19 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
           </div>
         ) : (
           <>
-            {splitTransactions.completed.length > 0 && (
-              <div className="bg-slate-50/30 dark:bg-slate-800/30 px-6 py-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Efetivadas</span>
-              </div>
-            )}
-            {splitTransactions.completed.map(t => renderItem(t, false))}
-
             {splitTransactions.pending.length > 0 && (
               <div className="bg-slate-50/30 dark:bg-slate-800/30 px-6 py-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Não Efetivadas (Futuras)</span>
               </div>
             )}
             {splitTransactions.pending.map(t => renderItem(t, true))}
+
+            {splitTransactions.completed.length > 0 && (
+              <div className="bg-slate-50/30 dark:bg-slate-800/30 px-6 py-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Efetivadas</span>
+              </div>
+            )}
+            {splitTransactions.completed.map(t => renderItem(t, false))}
           </>
         )}
       </div>
