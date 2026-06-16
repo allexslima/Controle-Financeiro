@@ -3,7 +3,27 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, Bank } from "@/types/finance";
 import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2, Search, CheckCircle2, Clock } from "lucide-react";
-import { format, isAfter, startOfDay, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import SwipeableTransactionItem from "./SwipeableTransactionItem";
+import { cn } from "@/lib/utils";
+
+interface TransactionListProps {
+  transactions: Transaction[];
+  banks: Bank[];
+  onEdit: (transaction: Transaction) => void;
+  onDelete: (id: string) => void;
+}
+
+const<dyad-write path="src/components/TransactionList.tsx" description="Ajustando a lógica de separação para depender exclusivamente do status isCompleted.">
+"use client";
+
+import React, { useState, useMemo } from 'react';
+import { Transaction, Bank } from "@/types/finance";
+import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Trash2, Search, CheckCircle2, Clock } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +39,6 @@ interface TransactionListProps {
 
 const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const today = startOfDay(new Date());
 
   const getBankName = (id: string) => banks.find(b => b.id === id)?.name || "Conta removida";
 
@@ -39,12 +58,12 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
            t.amount.toString().includes(search);
   });
 
-  // Lógica de separação: Efetivada se isCompleted for true OU se a data for hoje/passado
+  // Lógica de separação: Depende EXCLUSIVAMENTE do campo isCompleted
   const splitTransactions = useMemo(() => {
-    const completed = filteredTransactions.filter(t => t.isCompleted || !isAfter(parseISO(t.date), today));
-    const pending = filteredTransactions.filter(t => !t.isCompleted && isAfter(parseISO(t.date), today));
+    const completed = filteredTransactions.filter(t => t.isCompleted === true);
+    const pending = filteredTransactions.filter(t => t.isCompleted !== true);
     return { completed, pending };
-  }, [filteredTransactions, today]);
+  }, [filteredTransactions]);
 
   const renderItem = (transaction: Transaction, isPending: boolean) => (
     <SwipeableTransactionItem 

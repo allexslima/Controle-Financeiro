@@ -7,29 +7,18 @@ import AddTransactionDialog from "@/components/AddTransactionDialog";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
-import TransactionList from "@/components/TransactionList";
-import EditTransactionDialog from "@/components/EditTransactionDialog";
-import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { TrendingUp, TrendingDown, CreditCard, Wallet } from "lucide-react";
+import { TrendingUp, TrendingDown, CreditCard, Wallet, Landmark, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
-import { Transaction } from "@/types/finance";
+import { Transaction, Bank } from "@/types/finance";
 import { useNavigate } from "react-router-dom";
 
 const Index = () => {
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const { banks, transactions, addBank, addTransaction, deleteTransaction, updateTransaction } = useFinance();
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  
-  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{
-    type: 'edit' | 'delete',
-    transaction: Transaction,
-    updatedData?: Transaction
-  } | null>(null);
+  const { banks, transactions, addBank, addTransaction } = useFinance();
 
   const getBillingMonth = (transaction: Transaction) => {
     const tDate = parseISO(transaction.date);
@@ -44,76 +33,6 @@ const Index = () => {
     return tDate;
   };
 
-  const filteredTransactions = useMemo(() => {
-    const baseTransactions = transactions.filter(t => {
-      const billingMonth = getBillingMonth(t);
-      return isSameMonth(billingMonth, currentDate);
-    });
-
-    const nonCredit = baseTransactions.filter(t => t.method !== 'credit');
-
-    const creditByBank = baseTransactions.filter(t => t.method === 'credit').reduce((acc, t) => {
-      if (!acc[t.bankId]) acc[t.bankId] = { amount: 0, count: 0 };
-      acc[t.bankId].amount += t.amount;
-      acc[t.bankId].count += 1;
-      return acc;
-    }, {} as Record<string, { amount: number, count: number }>);
-
-    const groupedCredit: Transaction[] = Object.entries(creditByBank).map(([bankId, data]) => {
-      const bank = banks.find(b => b.id === bankId);
-      return {
-        id: `group-${bankId}`,
-        description: `Fatura ${bank?.name || 'Cartão'}`,
-        amount: data.amount,
-        method: 'credit',
-        category: 'Cartão de Crédito',
-        date: currentDate.toISOString(),
-        bankId: bankId,
-        isCompleted: false,
-      };
-    });
-
-    return [...nonCredit, ...groupedCredit].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, currentDate, banks]);
-
-  const handleEditRequest = (t: Transaction) => {
-    if (t.id.startsWith('group-')) {
-      navigate('/cards');
-      return;
-    }
-    setEditingTransaction(t);
-  };
-
-  const handleUpdate = (updated: Transaction) => {
-    if (updated.groupId) {
-      setPendingAction({ type: 'edit', transaction: updated, updatedData: updated });
-      setRecurringDialogOpen(true);
-    } else {
-      updateTransaction(updated);
-    }
-  };
-
-  const handleDeleteRequest = (id: string) => {
-    if (id.startsWith('group-')) return;
-    const t = transactions.find(item => item.id === id);
-    if (t?.groupId) {
-      setPendingAction({ type: 'delete', transaction: t });
-      setRecurringDialogOpen(true);
-    } else {
-      deleteTransaction(id);
-    }
-  };
-
-  const handleRecurringAction = (mode: 'single' | 'future' | 'all') => {
-    if (!pendingAction) return;
-    if (pendingAction.type === 'delete') {
-      deleteTransaction(pendingAction.transaction.id, mode);
-    } else if (pendingAction.type === 'edit' && pendingAction.updatedData) {
-      updateTransaction(pendingAction.updatedData, mode as 'single' | 'future');
-    }
-    setPendingAction(null);
-  };
-
   const summaryData = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
     
@@ -122,7 +41,7 @@ const Index = () => {
     const completed = base.filter(t => t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') return acc; // Transferências entre contas são neutras no global
+        if (t.method === 'transfer') return acc;
         return acc - t.amount;
       }, 0);
     
@@ -133,7 +52,6 @@ const Index = () => {
         return acc - t.amount;
       }, 0);
 
-    // Saldo do Mês Anterior: Soma de todas as transações antes do mês atual
     const previousBalance = transactions
       .filter(t => isBefore(getBillingMonth(t), monthStart))
       .reduce((acc, t) => {
@@ -147,16 +65,14 @@ const Index = () => {
 
   const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
 
-  const projectedBalance = useMemo(() => {
-    const accounts = banks.filter(b => b.type === 'account');
-    return accounts.reduce((acc, bank) => acc + bank.balance, 0);
+  const totalAccountsBalance = useMemo(() => {
+    return banks.filter(b => b.type === 'account').reduce((acc, b) => acc + b.balance, 0);
   }, [banks]);
 
   const totalCreditMonth = useMemo(() => 
     transactions.filter(t => {
       if (t.method !== 'credit') return false;
-      const billingMonth = getBillingMonth(t);
-      return isSameMonth(billingMonth, currentDate);
+      return isSameMonth(getBillingMonth(t), currentDate);
     }).reduce((acc, t) => acc + t.amount, 0), 
   [transactions, currentDate, banks]);
   
@@ -169,6 +85,32 @@ const Index = () => {
     transactions.filter(t => (t.method === 'debit' || t.method === 'credit') && isSameMonth(parseISO(t.date), currentDate))
       .reduce((acc, t) => acc + t.amount, 0), 
   [transactions, currentDate]);
+
+  // Cálculo de saldo por conta para o mês selecionado
+  const accountSummaries = useMemo(() => {
+    return banks.map(bank => {
+      const bankTransactions = transactions.filter(t => 
+        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+        isSameMonth(getBillingMonth(t), currentDate)
+      );
+
+      const monthBalance = bankTransactions.reduce((acc, t) => {
+        const isOrigin = t.bankId === bank.id;
+        const isDest = t.destinationBankId === bank.id;
+        
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') {
+          if (isOrigin && !isDest) return acc - t.amount;
+          if (!isOrigin && isDest) return acc + t.amount;
+          return acc;
+        }
+        if (t.method === 'credit') return acc - t.amount;
+        return acc - t.amount;
+      }, 0);
+
+      return { ...bank, monthBalance };
+    });
+  }, [banks, transactions, currentDate]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -203,10 +145,10 @@ const Index = () => {
                   <div className="p-2 bg-white/10 rounded-xl">
                     <Wallet size={20} />
                   </div>
-                  <p className="font-bold text-[10px] uppercase tracking-widest">Saldo Atual Contas</p>
+                  <p className="font-bold text-[10px] uppercase tracking-widest">Saldo Total Contas</p>
                 </div>
                 <h2 className="text-3xl font-black">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectedBalance)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAccountsBalance)}
                 </h2>
               </CardContent>
             </Card>
@@ -256,14 +198,42 @@ const Index = () => {
 
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
-              <h2 className="text-2xl font-black text-slate-900 dark:text-white">Transações do Mês</h2>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white">Resumo por Conta</h2>
             </div>
-            <TransactionList 
-              transactions={filteredTransactions} 
-              banks={banks} 
-              onEdit={handleEditRequest}
-              onDelete={handleDeleteRequest}
-            />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {accountSummaries.map(summary => (
+                <div 
+                  key={summary.id}
+                  onClick={() => navigate(summary.type === 'account' ? '/accounts' : '/cards')}
+                  className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:shadow-lg transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-2xl" style={{ backgroundColor: `${summary.color}15`, color: summary.color }}>
+                      {summary.type === 'account' ? <Landmark size={24} /> : <CreditCard size={24} />}
+                    </div>
+                    <div>
+                      <p className="font-black text-slate-900 dark:text-white">{summary.name}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        {summary.type === 'account' ? 'Saldo Atual' : 'Fatura Atual'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right flex items-center gap-4">
+                    <div>
+                      <p className="text-lg font-black text-slate-900 dark:text-white">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summary.balance)}
+                      </p>
+                      <p className={cn("text-[10px] font-bold", summary.monthBalance >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                        {summary.monthBalance >= 0 ? '+' : ''}
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summary.monthBalance)} no mês
+                      </p>
+                    </div>
+                    <ArrowRight size={18} className="text-slate-300 group-hover:text-primary transition-colors" />
+                  </div>
+                </div>
+              ))}
+            </div>
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
               <div className="flex justify-between text-sm font-medium text-slate-500">
@@ -292,24 +262,6 @@ const Index = () => {
               </div>
             </div>
           </div>
-
-          <EditTransactionDialog 
-            transaction={editingTransaction}
-            banks={banks}
-            onUpdate={handleUpdate}
-            onClose={() => setEditingTransaction(null)}
-          />
-
-          <RecurringActionDialog 
-            open={recurringDialogOpen}
-            onOpenChange={setRecurringDialogOpen}
-            title={pendingAction?.type === 'edit' ? "Editar Transação Recorrente" : "Excluir Transação Recorrente"}
-            description={pendingAction?.type === 'edit' 
-              ? "Esta transação faz parte de um grupo. Como deseja aplicar as alterações?" 
-              : "Esta transação faz parte de um grupo. Como deseja realizar a exclusão?"}
-            type={pendingAction?.type || 'edit'}
-            onAction={handleRecurringAction}
-          />
 
           <div className="pt-10">
             <MadeWithDyad />
