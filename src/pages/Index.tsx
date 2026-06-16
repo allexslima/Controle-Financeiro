@@ -14,6 +14,7 @@ import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } fro
 import { useFinance } from "@/context/FinanceContext";
 import { Transaction, Bank } from "@/types/finance";
 import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
 const Index = () => {
   const navigate = useNavigate();
