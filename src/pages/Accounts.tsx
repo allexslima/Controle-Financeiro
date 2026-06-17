@@ -15,6 +15,7 @@ import { Bank, Transaction } from "@/types/finance";
 import { isSameMonth, parseISO, isBefore, startOfMonth } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const AccountsPage = () => {
   const { banks, transactions, removeBank, updateBank, deleteTransaction, addTransaction, addBank, updateTransaction } = useFinance();
@@ -25,27 +26,67 @@ const AccountsPage = () => {
 
   const accountBanks = banks.filter(b => b.type === 'account');
 
-  const getCompletedBalance = (bank: Bank) => {
-    const pendingTransactions = transactions.filter(t => 
-      (t.bankId === bank.id || t.destinationBankId === bank.id) &&
-      !t.isCompleted
-    );
-    
-    let balance = bank.balance;
-    pendingTransactions.forEach(t => {
-      const isOrigin = t.bankId === bank.id;
-      const isDest = t.destinationBankId === bank.id;
-      
-      if (t.method === 'income') {
-        balance -= t.amount;
-      } else if (t.method === 'transfer') {
-        if (isOrigin && !isDest) balance += t.amount;
-        if (!isOrigin && isDest) balance -= t.amount;
-      } else {
-        balance += t.amount;
-      }
-    });
-    return balance;
+  // Função auxiliar para calcular os saldos de uma conta específica no mês selecionado
+  const getBankSummary = (bank: Bank) => {
+    const monthStart = startOfMonth(currentDate);
+
+    const previousBalance = transactions
+      .filter(t => 
+        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+        isBefore(parseISO(t.date), monthStart)
+      )
+      .reduce((acc, t) => {
+        const isOrigin = t.bankId === bank.id;
+        const isDest = t.destinationBankId === bank.id;
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') {
+          if (isOrigin && !isDest) return acc - t.amount;
+          if (!isOrigin && isDest) return acc + t.amount;
+          return acc;
+        }
+        return acc - t.amount;
+      }, 0);
+
+    const completedMonth = transactions
+      .filter(t => 
+        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+        isSameMonth(parseISO(t.date), currentDate) &&
+        t.isCompleted
+      )
+      .reduce((acc, t) => {
+        const isOrigin = t.bankId === bank.id;
+        const isDest = t.destinationBankId === bank.id;
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') {
+          if (isOrigin && !isDest) return acc - t.amount;
+          if (!isOrigin && isDest) return acc + t.amount;
+          return acc;
+        }
+        return acc - t.amount;
+      }, 0);
+
+    const futureMonth = transactions
+      .filter(t => 
+        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+        isSameMonth(parseISO(t.date), currentDate) &&
+        !t.isCompleted
+      )
+      .reduce((acc, t) => {
+        const isOrigin = t.bankId === bank.id;
+        const isDest = t.destinationBankId === bank.id;
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') {
+          if (isOrigin && !isDest) return acc - t.amount;
+          if (!isOrigin && isDest) return acc + t.amount;
+          return acc;
+        }
+        return acc - t.amount;
+      }, 0);
+
+    const currentBalance = previousBalance + completedMonth;
+    const projectedTotal = currentBalance + futureMonth;
+
+    return { previousBalance, completedMonth, futureMonth, currentBalance, projectedTotal };
   };
 
   const filteredTransactions = useMemo(() => {
@@ -56,61 +97,10 @@ const AccountsPage = () => {
     ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, selectedBank, currentDate]);
 
-  const summaryData = useMemo(() => {
-    if (!selectedBank) return { completed: 0, future: 0, previousBalance: 0 };
-    
-    const monthStart = startOfMonth(currentDate);
-
-    const completed = filteredTransactions
-      .filter(t => t.isCompleted)
-      .reduce((acc, t) => {
-        const isOrigin = t.bankId === selectedBank.id;
-        const isDest = t.destinationBankId === selectedBank.id;
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') {
-          if (isOrigin && !isDest) return acc - t.amount;
-          if (!isOrigin && isDest) return acc + t.amount;
-          return acc;
-        }
-        return acc - t.amount;
-      }, 0);
-
-    const future = filteredTransactions
-      .filter(t => !t.isCompleted)
-      .reduce((acc, t) => {
-        const isOrigin = t.bankId === selectedBank.id;
-        const isDest = t.destinationBankId === selectedBank.id;
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') {
-          if (isOrigin && !isDest) return acc - t.amount;
-          if (!isOrigin && isDest) return acc + t.amount;
-          return acc;
-        }
-        return acc - t.amount;
-      }, 0);
-
-    // Saldo anterior específico desta conta baseado apenas em transações
-    const previousBalance = transactions
-      .filter(t => 
-        (t.bankId === selectedBank.id || t.destinationBankId === selectedBank.id) &&
-        isBefore(parseISO(t.date), monthStart)
-      )
-      .reduce((acc, t) => {
-        const isOrigin = t.bankId === selectedBank.id;
-        const isDest = t.destinationBankId === selectedBank.id;
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') {
-          if (isOrigin && !isDest) return acc - t.amount;
-          if (!isOrigin && isDest) return acc + t.amount;
-          return acc;
-        }
-        return acc - t.amount;
-      }, 0);
-
-    return { completed, future, previousBalance };
-  }, [filteredTransactions, selectedBank, transactions, currentDate]);
-
-  const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
+  const selectedSummary = useMemo(() => {
+    if (!selectedBank) return null;
+    return getBankSummary(selectedBank);
+  }, [selectedBank, transactions, currentDate]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -128,16 +118,19 @@ const AccountsPage = () => {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {accountBanks.map(bank => (
-                  <BankCard 
-                    key={bank.id} 
-                    bank={bank} 
-                    displayBalance={getCompletedBalance(bank)}
-                    onRemove={removeBank} 
-                    onEdit={setEditingBank}
-                    onClick={setSelectedBank} 
-                  />
-                ))}
+                {accountBanks.map(bank => {
+                  const summary = getBankSummary(bank);
+                  return (
+                    <BankCard 
+                      key={bank.id} 
+                      bank={bank} 
+                      displayBalance={summary.currentBalance}
+                      onRemove={removeBank} 
+                      onEdit={setEditingBank}
+                      onClick={setSelectedBank} 
+                    />
+                  );
+                })}
               </div>
             </>
           ) : (
@@ -162,11 +155,19 @@ const AccountsPage = () => {
                   <Pencil size={18} />
                 </Button>
                 <h2 className="text-2xl font-black text-slate-900 dark:text-white">{selectedBank.name}</h2>
-                <div className="mt-4">
-                  <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest">Saldo Efetivado</p>
-                  <p className="text-4xl font-black text-slate-900 dark:text-white">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getCompletedBalance(selectedBank))}
-                  </p>
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest">Saldo Efetivado</p>
+                    <p className="text-4xl font-black text-slate-900 dark:text-white">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.currentBalance || 0)}
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Total Geral (Projeção)</p>
+                    <p className={cn("text-xl font-black", (selectedSummary?.projectedTotal || 0) >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.projectedTotal || 0)}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -180,26 +181,26 @@ const AccountsPage = () => {
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
                 <div className="flex justify-between text-sm font-medium text-slate-500">
                   <span>Valores Efetuados (Mês)</span>
-                  <span className={summaryData.completed >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.completed)}
+                  <span className={(selectedSummary?.completedMonth || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.completedMonth || 0)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm font-medium text-slate-500">
                   <span>Valores Futuros (Mês)</span>
-                  <span className={summaryData.future >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
+                  <span className={(selectedSummary?.futureMonth || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.futureMonth || 0)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm font-medium text-slate-500">
                   <span>Saldo Mês Anterior</span>
-                  <span className={summaryData.previousBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.previousBalance)}
+                  <span className={(selectedSummary?.previousBalance || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.previousBalance || 0)}
                   </span>
                 </div>
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
                   <span className="text-lg font-black text-slate-900 dark:text-white">Total Geral</span>
-                  <span className={`text-2xl font-black ${grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
+                  <span className={`text-2xl font-black ${(selectedSummary?.projectedTotal || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.projectedTotal || 0)}
                   </span>
                 </div>
               </div>
