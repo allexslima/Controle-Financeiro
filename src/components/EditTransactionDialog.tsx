@@ -19,6 +19,7 @@ import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format, parseISO, isAfter, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
+import CategorySelector from "./CategorySelector";
 
 interface EditTransactionDialogProps {
   transaction: Transaction | null;
@@ -33,13 +34,11 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
   const [method, setMethod] = useState<TransactionMethod>("debit");
   const [bankId, setBankId] = useState("");
   const [destinationBankId, setDestinationBankId] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState("");
   const [date, setDate] = useState("");
   const [installments, setInstallments] = useState("1");
   const [isRecurring, setIsRecurring] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
-
-  const today = startOfDay(new Date());
 
   useEffect(() => {
     if (transaction) {
@@ -48,7 +47,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       setMethod(transaction.method);
       setBankId(transaction.bankId);
       setDestinationBankId(transaction.destinationBankId || "");
-      setCategory(transaction.category);
+      setCategoryId(transaction.category);
       setDate(format(parseISO(transaction.date), "yyyy-MM-dd"));
       setInstallments(transaction.installments?.toString() || "1");
       setIsRecurring(transaction.isRecurring || false);
@@ -75,7 +74,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       method,
       bankId,
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
-      category: category || (method === 'transfer' ? "Transferência" : "Geral"),
+      category: categoryId,
       date: localDate.toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
@@ -132,9 +131,8 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-description" className="font-bold text-xs uppercase tracking-widest text-slate-400">Descrição</Label>
+            <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">Descrição</Label>
             <Input
-              id="edit-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="rounded-2xl h-12 bg-slate-50 dark:bg-slate-900 border-none"
@@ -144,9 +142,8 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-amount" className="font-bold text-xs uppercase tracking-widest text-slate-400">Valor (R$)</Label>
+              <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">Valor (R$)</Label>
               <Input
-                id="edit-amount"
                 type="number"
                 step="0.01"
                 value={amount}
@@ -156,9 +153,8 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-date" className="font-bold text-xs uppercase tracking-widest text-slate-400">Data</Label>
+              <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">Data</Label>
               <Input
-                id="edit-date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -166,6 +162,11 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">Categoria</Label>
+            <CategorySelector value={categoryId} onChange={setCategoryId} />
           </div>
 
           <div className="space-y-2">

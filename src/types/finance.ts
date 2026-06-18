@@ -12,17 +12,24 @@ export interface Bank {
 
 export type TransactionMethod = 'debit' | 'credit' | 'income' | 'transfer';
 
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+  icon?: string;
+}
+
 export interface Transaction {
   id: string;
   description: string;
   amount: number;
   method: TransactionMethod;
-  category: string;
+  category: string; // ID da categoria
   date: string;
   bankId: string;
   destinationBankId?: string;
   installments?: number;
   isRecurring?: boolean;
   groupId?: string;
-  isCompleted?: boolean; // Novo campo para controle de efetivação
+  isCompleted?: boolean;
 }

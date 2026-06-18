@@ -7,7 +7,8 @@ import {
   Landmark, 
   CreditCard, 
   LogOut,
-  PieChart
+  PieChart,
+  BarChart3
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
@@ -19,6 +20,7 @@ const menuItems = [
   { icon: ArrowLeftRight, label: 'Transações', path: '/transactions' },
   { icon: Landmark, label: 'Contas', path: '/accounts' },
   { icon: CreditCard, label: 'Cartões', path: '/cards' },
+  { icon: BarChart3, label: 'Relatórios', path: '/report' },
 ];
 
 const Sidebar = () => {

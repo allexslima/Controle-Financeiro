@@ -20,6 +20,7 @@ import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format, isAfter, startOfDay, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import CategorySelector from "./CategorySelector";
 
 interface AddTransactionDialogProps {
   banks: Bank[];
@@ -34,7 +35,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const [method, setMethod] = useState<TransactionMethod>("debit");
   const [bankId, setBankId] = useState("");
   const [destinationBankId, setDestinationBankId] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState("cat-7"); // Default Geral
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [installments, setInstallments] = useState("1");
   const [isRecurring, setIsRecurring] = useState(false);
@@ -49,7 +50,6 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     return bank.type === 'account';
   });
 
-  // Atualiza o status de efetivada automaticamente baseado na data, mas permite alteração manual
   useEffect(() => {
     const selectedDate = parseISO(date);
     setIsCompleted(!isAfter(selectedDate, today));
@@ -63,6 +63,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     if (!amount) newErrors.amount = true;
     if (!bankId) newErrors.bankId = true;
     if (!date) newErrors.date = true;
+    if (!categoryId) newErrors.categoryId = true;
     if (method === 'transfer' && !destinationBankId) newErrors.destinationBankId = true;
 
     if (Object.keys(newErrors).length > 0) {
@@ -81,7 +82,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
       method,
       bankId,
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
-      category: category || (method === 'transfer' ? "Transferência" : "Geral"),
+      category: categoryId,
       date: localDate.toISOString(),
       installments: method === 'credit' ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
@@ -99,7 +100,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     setAmount("");
     setBankId("");
     setDestinationBankId("");
-    setCategory("");
+    setCategoryId("cat-7");
     setMethod("debit");
     setDate(format(new Date(), "yyyy-MM-dd"));
     setInstallments("1");
@@ -197,6 +198,15 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
                 className={cn("rounded-xl", errors.date && "border-destructive")}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Categoria *</Label>
+            <CategorySelector 
+              value={categoryId} 
+              onChange={setCategoryId} 
+              error={errors.categoryId}
+            />
           </div>
 
           <div className="space-y-2">
