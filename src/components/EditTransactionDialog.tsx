@@ -76,7 +76,7 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
       category: categoryId,
       date: localDate.toISOString(),
-      installments: method === 'credit' ? parseInt(installments) : undefined,
+      installments: (method === 'credit' || method === 'debit') ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
       isCompleted: isCompleted,
     };
@@ -202,6 +202,19 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
           )}
 
           <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {(method === 'credit' || method === 'debit') && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-installments">Número de Parcelas</Label>
+                <Input
+                  id="edit-installments"
+                  type="number"
+                  min="1"
+                  value={installments}
+                  onChange={(e) => setInstallments(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            )}
             <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-2xl">
               <Checkbox 
                 id="edit-recurring" 

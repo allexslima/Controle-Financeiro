@@ -249,7 +249,6 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
                   id="installments"
                   type="number"
                   min="1"
-                  max="48"
                   value={installments}
                   onChange={(e) => setInstallments(e.target.value)}
                   className="rounded-xl"
