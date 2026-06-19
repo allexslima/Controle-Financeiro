@@ -11,6 +11,7 @@ import EditTransactionDialog from "@/components/EditTransactionDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import PayInvoiceDialog from "@/components/PayInvoiceDialog";
+import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
 import { isSameMonth, parseISO, getDate, addMonths } from "date-fns";
@@ -23,6 +24,13 @@ const CardsPage = () => {
   const [editingBank, setEditingBank] = useState<Bank | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'edit' | 'delete',
+    transaction: Transaction,
+    updatedData?: Transaction
+  } | null>(null);
 
   const creditCards = banks.filter(b => b.type === 'credit_card');
 
@@ -82,6 +90,35 @@ const CardsPage = () => {
   }, [filteredTransactions, selectedCard]);
 
   const grandTotal = summaryData.completed + summaryData.future;
+
+  const handleDeleteRequest = (id: string) => {
+    const t = transactions.find(item => item.id === id);
+    if (t?.groupId) {
+      setPendingAction({ type: 'delete', transaction: t });
+      setRecurringDialogOpen(true);
+    } else {
+      deleteTransaction(id);
+    }
+  };
+
+  const handleUpdate = (updated: Transaction) => {
+    if (updated.groupId) {
+      setPendingAction({ type: 'edit', transaction: updated, updatedData: updated });
+      setRecurringDialogOpen(true);
+    } else {
+      updateTransaction(updated);
+    }
+  };
+
+  const handleRecurringAction = (mode: 'single' | 'future' | 'all') => {
+    if (!pendingAction) return;
+    if (pendingAction.type === 'delete') {
+      deleteTransaction(pendingAction.transaction.id, mode);
+    } else if (pendingAction.type === 'edit' && pendingAction.updatedData) {
+      updateTransaction(pendingAction.updatedData, mode as 'single' | 'future');
+    }
+    setPendingAction(null);
+  };
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -161,7 +198,7 @@ const CardsPage = () => {
                 transactions={filteredTransactions} 
                 banks={banks} 
                 onEdit={setEditingTransaction} 
-                onDelete={deleteTransaction}
+                onDelete={handleDeleteRequest}
               />
 
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
@@ -197,8 +234,19 @@ const CardsPage = () => {
         <EditTransactionDialog 
           transaction={editingTransaction}
           banks={banks}
-          onUpdate={updateTransaction}
+          onUpdate={handleUpdate}
           onClose={() => setEditingTransaction(null)}
+        />
+
+        <RecurringActionDialog 
+          open={recurringDialogOpen}
+          onOpenChange={setRecurringDialogOpen}
+          title={pendingAction?.type === 'edit' ? "Editar Transação Recorrente" : "Excluir Transação Recorrente"}
+          description={pendingAction?.type === 'edit' 
+            ? "Esta transação faz parte de um grupo. Como deseja aplicar as alterações?" 
+            : "Esta transação faz parte de um grupo. Como deseja realizar a exclusão?"}
+          type={pendingAction?.type || 'edit'}
+          onAction={handleRecurringAction}
         />
       </main>
     </div>

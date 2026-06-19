@@ -84,7 +84,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
       destinationBankId: method === 'transfer' ? destinationBankId : undefined,
       category: categoryId,
       date: localDate.toISOString(),
-      installments: method === 'credit' ? parseInt(installments) : undefined,
+      installments: (method === 'credit' || method === 'debit') ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
       isCompleted: isCompleted,
     };
@@ -242,7 +242,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
           )}
 
           <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-            {method === 'credit' && (
+            {(method === 'credit' || method === 'debit') && (
               <div className="space-y-2">
                 <Label htmlFor="installments">Número de Parcelas</Label>
                 <Input
