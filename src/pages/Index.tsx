@@ -66,10 +66,6 @@ const Index = () => {
 
   const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
 
-  const totalAccountsBalance = useMemo(() => {
-    return banks.filter(b => b.type === 'account').reduce((acc, b) => acc + b.balance, 0);
-  }, [banks]);
-
   const totalCreditMonth = useMemo(() => 
     transactions.filter(t => {
       if (t.method !== 'credit') return false;
@@ -188,10 +184,10 @@ const Index = () => {
                   <div className="p-2 bg-white/10 rounded-xl">
                     <Wallet size={20} />
                   </div>
-                  <p className="font-bold text-[10px] uppercase tracking-widest">Saldo Total Contas</p>
+                  <p className="font-bold text-[10px] uppercase tracking-widest">Total Geral do Mês</p>
                 </div>
                 <h2 className="text-3xl font-black">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAccountsBalance)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
                 </h2>
               </CardContent>
             </Card>
