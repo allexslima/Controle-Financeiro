@@ -67,14 +67,13 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   const [history, setHistory] = useState<HistoryState[]>([]);
 
-  // Lógica de Importação via URL usando Base64 nativo
+  // Lógica de Importação via URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const importData = params.get('import');
 
     if (importData) {
       try {
-        // Decodificação Base64 nativa compatível com Unicode
         const decodedData = decodeURIComponent(atob(importData).split('').map((c) => {
           return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
         }).join(''));
@@ -82,30 +81,21 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         if (decodedData) {
           const parsed = JSON.parse(decodedData);
           
+          // Usamos um pequeno timeout para garantir que a UI carregou
           setTimeout(() => {
-            const confirmImport = window.confirm(
-              "Dados de backup detectados! Deseja importar agora? \n\nIsso substituirá seus dados atuais."
-            );
-
-            if (confirmImport) {
-              saveHistory();
-              if (parsed.banks) setBanks(parsed.banks);
-              if (parsed.transactions) setTransactions(parsed.transactions);
-              if (parsed.categories) setCategories(parsed.categories);
-              
+            if (window.confirm("Dados de backup detectados! Deseja substituir seus dados atuais por estes?")) {
+              importFullData(parsed);
               showSuccess("Dados importados com sucesso!");
-              
-              const newUrl = window.location.origin + window.location.pathname;
-              window.history.replaceState({}, document.title, newUrl);
+              // Limpa a URL
+              window.history.replaceState({}, document.title, window.location.pathname);
             } else {
-              const newUrl = window.location.origin + window.location.pathname;
-              window.history.replaceState({}, document.title, newUrl);
+              window.history.replaceState({}, document.title, window.location.pathname);
             }
-          }, 500);
+          }, 800);
         }
       } catch (err) {
-        console.error("Erro ao importar dados:", err);
-        showError("O link de importação é inválido.");
+        console.error("Erro na importação:", err);
+        showError("O link de importação está corrompido ou é muito longo.");
       }
     }
   }, []);
@@ -136,9 +126,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   const importFullData = (data: HistoryState) => {
     saveHistory();
-    setBanks(data.banks);
-    setTransactions(data.transactions);
-    setCategories(data.categories);
+    if (data.banks) setBanks(data.banks);
+    if (data.transactions) setTransactions(data.transactions);
+    if (data.categories) setCategories(data.categories);
   };
 
   const applyTransactionToBalance = (transaction: Transaction, reverse = false, currentBanks = banks) => {
