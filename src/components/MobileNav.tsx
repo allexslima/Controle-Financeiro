@@ -8,7 +8,8 @@ import {
   CreditCard, 
   PlusCircle,
   PieChart,
-  BarChart3
+  BarChart3,
+  CalendarDays
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
@@ -23,7 +24,7 @@ const MobileNav = () => {
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Início', path: '/' },
-    { icon: ArrowLeftRight, label: 'Transações', path: '/transactions' },
+    { icon: CalendarDays, label: 'Calendário', path: '/calendar' },
     { icon: BarChart3, label: 'Relatórios', path: '/report' },
     { icon: Landmark, label: 'Contas', path: '/accounts' },
     { icon: CreditCard, label: 'Cartões', path: '/cards' },
