@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
@@ -11,11 +11,19 @@ import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } from "date-fns";
 import { Transaction } from "@/types/finance";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const TransactionsPage = () => {
   const navigate = useNavigate();
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const location = useLocation();
+  
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (location.state?.selectedDate) {
+      return new Date(location.state.selectedDate);
+    }
+    return new Date();
+  });
+
   const { transactions, banks, deleteTransaction, updateTransaction, addTransaction } = useFinance();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   
@@ -25,6 +33,13 @@ const TransactionsPage = () => {
     transaction: Transaction,
     updatedData?: Transaction
   } | null>(null);
+
+  // Limpa o estado da navegação após carregar para não resetar o mês ao atualizar a página
+  useEffect(() => {
+    if (location.state?.selectedDate) {
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const getBillingMonth = (transaction: Transaction) => {
     const tDate = parseISO(transaction.date);

@@ -22,8 +22,10 @@ import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import useEmblaCarousel from 'embla-carousel-react';
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
 
 const CalendarPage = () => {
+  const navigate = useNavigate();
   const { transactions, banks } = useFinance();
   const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: 'start', skipSnaps: false });
@@ -79,6 +81,7 @@ const CalendarPage = () => {
       const grandTotal = completed + future + previousBalance;
 
       months.push({
+        date: currentMonth,
         name: format(currentMonth, "MMMM", { locale: ptBR }),
         completed,
         future,
@@ -88,6 +91,10 @@ const CalendarPage = () => {
     }
     return months;
   }, [transactions, banks, selectedYear]);
+
+  const handleMonthClick = (date: Date) => {
+    navigate('/transactions', { state: { selectedDate: date.toISOString() } });
+  };
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
@@ -133,12 +140,15 @@ const CalendarPage = () => {
                     key={index} 
                     className="flex-[0_0_85%] sm:flex-[0_0_45%] lg:flex-[0_0_30%] min-w-0"
                   >
-                    <div className={cn(
-                      "p-8 rounded-[2.5rem] border-2 transition-all h-full flex flex-col justify-between",
-                      month.grandTotal >= 0 
-                        ? "bg-emerald-50/50 border-emerald-100 dark:bg-emerald-950/10 dark:border-emerald-900/30" 
-                        : "bg-rose-50/50 border-rose-100 dark:bg-rose-950/10 dark:border-rose-900/30"
-                    )}>
+                    <div 
+                      onClick={() => handleMonthClick(month.date)}
+                      className={cn(
+                        "p-8 rounded-[2.5rem] border-2 transition-all h-full flex flex-col justify-between cursor-pointer hover:scale-[1.02] active:scale-95",
+                        month.grandTotal >= 0 
+                          ? "bg-emerald-50/50 border-emerald-100 dark:bg-emerald-950/10 dark:border-emerald-900/30 hover:border-emerald-300" 
+                          : "bg-rose-50/50 border-rose-100 dark:bg-rose-950/10 dark:border-rose-900/30 hover:border-rose-300"
+                      )}
+                    >
                       <div>
                         <h3 className="text-2xl font-black capitalize mb-8 text-slate-900 dark:text-white">
                           {month.name}
