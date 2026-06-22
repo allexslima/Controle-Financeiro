@@ -4,7 +4,6 @@ import React from 'react';
 import { Share2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFinance } from "@/context/FinanceContext";
-import LZString from "lz-string";
 import { showSuccess, showError } from "@/utils/toast";
 import {
   Tooltip,
@@ -27,13 +26,15 @@ const ShareDataButton = () => {
       };
 
       const jsonString = JSON.stringify(dataToShare);
-      const compressed = LZString.compressToEncodedURIComponent(jsonString);
       
-      // Gera a URL base + o parâmetro de importação
+      // Codificação Base64 nativa compatível com Unicode
+      const encodedData = btoa(encodeURIComponent(jsonString).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+        return String.fromCharCode(parseInt(p1, 16));
+      }));
+      
       const baseUrl = window.location.origin + window.location.pathname;
-      const shareUrl = `${baseUrl}?import=${compressed}`;
+      const shareUrl = `${baseUrl}?import=${encodedData}`;
 
-      // Tenta usar a API de compartilhamento nativa (mobile)
       if (navigator.share) {
         await navigator.share({
           title: 'Meus Dados - Finance.io',
@@ -42,15 +43,14 @@ const ShareDataButton = () => {
         });
         showSuccess("Link compartilhado!");
       } else {
-        // Fallback para copiar para a área de transferência
         await navigator.clipboard.writeText(shareUrl);
         setCopied(true);
-        showSuccess("Link de backup copiado para a área de transferência!");
+        showSuccess("Link de backup copiado!");
         setTimeout(() => setCopied(false), 3000);
       }
     } catch (err) {
       console.error(err);
-      showError("Não foi possível gerar o link de compartilhamento.");
+      showError("Não foi possível gerar o link.");
     }
   };
 

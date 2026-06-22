@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Bank, Transaction, Category } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { addMonths, parseISO, isAfter, isSameDay } from "date-fns";
-import LZString from "lz-string";
 
 interface HistoryState {
   banks: Bank[];
@@ -68,21 +67,24 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   const [history, setHistory] = useState<HistoryState[]>([]);
 
-  // Lógica de Importação via URL
+  // Lógica de Importação via URL usando Base64 nativo
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const importData = params.get('import');
 
     if (importData) {
       try {
-        const decompressed = LZString.decompressFromEncodedURIComponent(importData);
-        if (decompressed) {
-          const parsed = JSON.parse(decompressed);
+        // Decodificação Base64 nativa compatível com Unicode
+        const decodedData = decodeURIComponent(atob(importData).split('').map((c) => {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        if (decodedData) {
+          const parsed = JSON.parse(decodedData);
           
-          // Pequeno delay para garantir que o app carregou
           setTimeout(() => {
             const confirmImport = window.confirm(
-              "Dados de backup detectados no link! Deseja importar agora? \n\nATENÇÃO: Isso substituirá todos os seus dados atuais neste dispositivo."
+              "Dados de backup detectados! Deseja importar agora? \n\nIsso substituirá seus dados atuais."
             );
 
             if (confirmImport) {
@@ -93,11 +95,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
               
               showSuccess("Dados importados com sucesso!");
               
-              // Limpa a URL para não importar de novo ao atualizar
               const newUrl = window.location.origin + window.location.pathname;
               window.history.replaceState({}, document.title, newUrl);
             } else {
-              // Limpa a URL mesmo se cancelar
               const newUrl = window.location.origin + window.location.pathname;
               window.history.replaceState({}, document.title, newUrl);
             }
@@ -105,7 +105,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         }
       } catch (err) {
         console.error("Erro ao importar dados:", err);
-        showError("O link de importação é inválido ou está corrompido.");
+        showError("O link de importação é inválido.");
       }
     }
   }, []);
