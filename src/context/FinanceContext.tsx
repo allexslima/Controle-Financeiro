@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Bank, Transaction, Category } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { addMonths, parseISO, isAfter, isSameDay } from "date-fns";
+import LZString from "lz-string";
 
 interface HistoryState {
   banks: Bank[];
@@ -26,6 +27,7 @@ interface FinanceContextType {
   deleteCategory: (id: string) => void;
   undo: () => void;
   canUndo: boolean;
+  importFullData: (data: HistoryState) => void;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -66,6 +68,48 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   const [history, setHistory] = useState<HistoryState[]>([]);
 
+  // Lógica de Importação via URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const importData = params.get('import');
+
+    if (importData) {
+      try {
+        const decompressed = LZString.decompressFromEncodedURIComponent(importData);
+        if (decompressed) {
+          const parsed = JSON.parse(decompressed);
+          
+          // Pequeno delay para garantir que o app carregou
+          setTimeout(() => {
+            const confirmImport = window.confirm(
+              "Dados de backup detectados no link! Deseja importar agora? \n\nATENÇÃO: Isso substituirá todos os seus dados atuais neste dispositivo."
+            );
+
+            if (confirmImport) {
+              saveHistory();
+              if (parsed.banks) setBanks(parsed.banks);
+              if (parsed.transactions) setTransactions(parsed.transactions);
+              if (parsed.categories) setCategories(parsed.categories);
+              
+              showSuccess("Dados importados com sucesso!");
+              
+              // Limpa a URL para não importar de novo ao atualizar
+              const newUrl = window.location.origin + window.location.pathname;
+              window.history.replaceState({}, document.title, newUrl);
+            } else {
+              // Limpa a URL mesmo se cancelar
+              const newUrl = window.location.origin + window.location.pathname;
+              window.history.replaceState({}, document.title, newUrl);
+            }
+          }, 500);
+        }
+      } catch (err) {
+        console.error("Erro ao importar dados:", err);
+        showError("O link de importação é inválido ou está corrompido.");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
     localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
@@ -88,6 +132,13 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setCategories(lastState.categories);
     setHistory(prev => prev.slice(0, -1));
     showSuccess("Ação desfeita!");
+  };
+
+  const importFullData = (data: HistoryState) => {
+    saveHistory();
+    setBanks(data.banks);
+    setTransactions(data.transactions);
+    setCategories(data.categories);
   };
 
   const applyTransactionToBalance = (transaction: Transaction, reverse = false, currentBanks = banks) => {
@@ -249,7 +300,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     <FinanceContext.Provider value={{ 
       banks, transactions, categories, addBank, removeBank, updateBank, 
       addTransaction, deleteTransaction, updateTransaction, 
-      addCategory, updateCategory, deleteCategory, undo, canUndo: history.length > 0
+      addCategory, updateCategory, deleteCategory, undo, canUndo: history.length > 0,
+      importFullData
     }}>
       {children}
     </FinanceContext.Provider>

@@ -15,6 +15,7 @@ import { Link, useLocation } from "react-router-dom";
 import AddTransactionDialog from "./AddTransactionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import UndoButton from "./UndoButton";
+import ShareDataButton from "./ShareDataButton";
 
 const MobileNav = () => {
   const location = useLocation();
@@ -37,7 +38,10 @@ const MobileNav = () => {
           </div>
           <span className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
         </div>
-        <UndoButton />
+        <div className="flex gap-1">
+          <UndoButton />
+          <ShareDataButton />
+        </div>
       </div>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-lg border-t border-slate-100 dark:border-slate-800 px-4 py-3 flex items-center justify-between z-50 pb-safe">
