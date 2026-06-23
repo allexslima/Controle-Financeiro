@@ -10,6 +10,7 @@ import MonthNavigator from "@/components/MonthNavigator";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, TrendingDown, CreditCard, Wallet, Landmark, ArrowRight, BarChart3 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
 import { Transaction, Bank } from "@/types/finance";
@@ -147,11 +148,8 @@ const Index = () => {
                 </h3>
               </CardContent>
             </Card>
-
-            {/* ... outros cards ... */}
           </div>
 
-          {/* ... resto do dashboard ... */}
           <div className="pt-10">
             <MadeWithDyad />
           </div>
