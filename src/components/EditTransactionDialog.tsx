@@ -14,7 +14,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat, CheckCircle2 } from "lucide-react";
+import { 
+  CreditCard, 
+  Wallet, 
+  ArrowUpCircle, 
+  ArrowLeftRight, 
+  Repeat, 
+  CheckCircle2,
+  TrendingUp,
+  ArrowDownLeft
+} from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format, parseISO, isAfter, startOfDay } from "date-fns";
@@ -57,8 +66,18 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
 
   const filteredBanks = banks.filter(bank => {
     if (method === 'credit') return bank.type === 'credit_card';
+    if (method === 'investment_apply') return bank.type === 'account';
+    if (method === 'investment_redeem') return bank.type === 'investment';
     return bank.type === 'account';
   });
+
+  const destinationBanks = banks.filter(bank => {
+    if (method === 'investment_apply') return bank.type === 'investment';
+    if (method === 'investment_redeem') return bank.type === 'account';
+    return bank.type === 'account';
+  });
+
+  const isInvestment = method === 'investment_apply' || method === 'investment_redeem';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,14 +86,18 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
     const [year, month, day] = date.split('-').map(Number);
     const localDate = new Date(year, month - 1, day, 12, 0, 0);
 
+    let finalCategory = categoryId;
+    if (method === 'investment_apply') finalCategory = 'cat-inv-apply';
+    if (method === 'investment_redeem') finalCategory = 'cat-inv-redeem';
+
     const updatedTransaction: Transaction = {
       ...transaction,
       description,
       amount: parseFloat(amount),
       method,
       bankId,
-      destinationBankId: method === 'transfer' ? destinationBankId : undefined,
-      category: categoryId,
+      destinationBankId: (method === 'transfer' || isInvestment) ? destinationBankId : undefined,
+      category: finalCategory,
       date: localDate.toISOString(),
       installments: (method === 'credit' || method === 'debit') ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
@@ -110,18 +133,20 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
             />
           </div>
 
-          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl">
+          <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl">
             {[
               { id: 'income', label: 'Receita', icon: ArrowUpCircle, color: 'bg-emerald-600' },
               { id: 'debit', label: 'Débito', icon: Wallet, color: 'bg-blue-600' },
               { id: 'credit', label: 'Crédito', icon: CreditCard, color: 'bg-purple-600' },
               { id: 'transfer', label: 'Transf.', icon: ArrowLeftRight, color: 'bg-orange-500' },
+              { id: 'investment_apply', label: 'Aplicação', icon: TrendingUp, color: 'bg-sky-600' },
+              { id: 'investment_redeem', label: 'Resgate', icon: ArrowDownLeft, color: 'bg-amber-600' },
             ].map((item) => (
               <Button
                 key={item.id}
                 type="button"
                 variant={method === item.id ? 'default' : 'ghost'}
-                className={`rounded-xl flex-col py-6 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
+                className={`rounded-xl flex-col py-4 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
                 onClick={() => setMethod(item.id as TransactionMethod)}
               >
                 <item.icon className="h-4 w-4" />
@@ -164,13 +189,18 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">Categoria</Label>
-            <CategorySelector value={categoryId} onChange={setCategoryId} />
-          </div>
+          {!isInvestment && (
+            <div className="space-y-2">
+              <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">Categoria</Label>
+              <CategorySelector value={categoryId} onChange={setCategoryId} />
+            </div>
+          )}
 
           <div className="space-y-2">
-            <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">{method === 'credit' ? 'Cartão de Crédito' : 'Conta Bancária'}</Label>
+            <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">
+              {method === 'investment_redeem' ? 'Conta de Investimento (Origem)' : 
+               method === 'credit' ? 'Cartão de Crédito' : 'Conta Bancária (Origem)'}
+            </Label>
             <Select onValueChange={setBankId} value={bankId} required>
               <SelectTrigger className="rounded-2xl h-12 bg-slate-50 dark:bg-slate-900 border-none">
                 <SelectValue placeholder="Selecione" />
@@ -183,15 +213,17 @@ const EditTransactionDialog = ({ transaction, banks, onUpdate, onClose }: EditTr
             </Select>
           </div>
 
-          {method === 'transfer' && (
+          {(method === 'transfer' || isInvestment) && (
             <div className="space-y-2">
-              <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">Conta de Destino</Label>
+              <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">
+                {method === 'investment_apply' ? 'Conta de Investimento (Destino)' : 'Conta Bancária (Destino)'}
+              </Label>
               <Select onValueChange={setDestinationBankId} value={destinationBankId} required>
-                <SelectTrigger className="rounded-2xl h-12 bg-orange-50/30 dark:bg-orange-950/10 border-orange-100 dark:border-orange-900/30">
+                <SelectTrigger className="rounded-2xl h-12 bg-sky-50/30 dark:bg-sky-950/10 border-sky-100 dark:border-sky-900/30">
                   <SelectValue placeholder="Selecione o destino" />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl">
-                  {banks.filter(b => b.type === 'account').map((bank) => (
+                  {destinationBanks.map((bank) => (
                     <SelectItem key={bank.id} value={bank.id} disabled={bank.id === bankId}>
                       {bank.name}
                     </SelectItem>

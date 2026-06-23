@@ -43,7 +43,8 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-5', name: 'Educação', color: '#8b5cf6' },
   { id: 'cat-6', name: 'Moradia', color: '#6366f1' },
   { id: 'cat-7', name: 'Geral', color: '#94a3b8' },
-  { id: 'cat-invest', name: 'Investimentos', color: '#0ea5e9' },
+  { id: 'cat-inv-apply', name: 'Aplicação', color: '#0ea5e9' },
+  { id: 'cat-inv-redeem', name: 'Resgate', color: '#f59e0b' },
 ];
 
 export const FinanceProvider = ({ children }: { children: React.ReactNode }) => {
@@ -103,7 +104,6 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     return currentBanks.map(bank => {
       const multiplier = reverse ? -1 : 1;
       
-      // Lógica para Aplicação (Sai da conta, entra no investimento)
       if (transaction.method === 'investment_apply') {
         if (bank.id === transaction.bankId) {
           return { ...bank, balance: bank.balance - (transaction.amount * multiplier) };
@@ -113,17 +113,15 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         }
       }
 
-      // Lógica para Resgate (Sai do investimento, entra na conta)
       if (transaction.method === 'investment_redeem') {
-        if (bank.id === transaction.bankId) { // bankId aqui é a conta de investimento
+        if (bank.id === transaction.bankId) {
           return { ...bank, balance: bank.balance - (transaction.amount * multiplier) };
         }
-        if (bank.id === transaction.destinationBankId) { // destination é a conta corrente
+        if (bank.id === transaction.destinationBankId) {
           return { ...bank, balance: bank.balance + (transaction.amount * multiplier) };
         }
       }
 
-      // Lógica padrão
       if (bank.id === transaction.bankId) {
         let newBalance = bank.balance;
         if (transaction.method === 'income') {

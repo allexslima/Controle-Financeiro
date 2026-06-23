@@ -9,15 +9,15 @@ import {
   TrendingUp, 
   Plus, 
   ArrowUpRight, 
-  ArrowDownLeft, 
   PieChart as PieIcon,
-  Wallet,
-  ChevronRight,
-  Landmark
+  Landmark,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
+import EditBankDialog from "@/components/EditBankDialog";
 import { 
   Dialog,
   DialogContent,
@@ -32,10 +32,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { showSuccess } from "@/utils/toast";
 
 const InvestmentsPage = () => {
-  const { banks, transactions, addBank, addTransaction } = useFinance();
+  const { banks, transactions, addBank, addTransaction, removeBank, updateBank } = useFinance();
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
+  const [editingBank, setEditingBank] = useState<Bank | null>(null);
   
-  // Estados para nova conta de investimento
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("CDB");
   const [newBalance, setNewBalance] = useState("");
@@ -43,6 +43,22 @@ const InvestmentsPage = () => {
 
   const investmentBanks = banks.filter(b => b.type === 'investment');
   const totalInvested = investmentBanks.reduce((acc, b) => acc + b.balance, 0);
+
+  const distributionByType = useMemo(() => {
+    const groups: Record<string, { amount: number, color: string }> = {};
+    investmentBanks.forEach(bank => {
+      const type = bank.investmentType || 'Outros';
+      if (!groups[type]) {
+        groups[type] = { amount: 0, color: bank.color };
+      }
+      groups[type].amount += bank.balance;
+    });
+    return Object.entries(groups).map(([type, data]) => ({
+      type,
+      ...data,
+      percentage: totalInvested > 0 ? (data.amount / totalInvested) * 100 : 0
+    })).sort((a, b) => b.amount - a.amount);
+  }, [investmentBanks, totalInvested]);
 
   const handleAddInvestmentAccount = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,25 +183,25 @@ const InvestmentsPage = () => {
               <CardHeader>
                 <CardTitle className="text-lg font-black flex items-center gap-2">
                   <PieIcon size={20} className="text-sky-500" />
-                  Distribuição
+                  Distribuição por Tipo
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {investmentBanks.length === 0 ? (
+                {distributionByType.length === 0 ? (
                   <p className="text-center text-slate-400 py-8 text-sm">Nenhum investimento cadastrado.</p>
                 ) : (
-                  investmentBanks.map(bank => (
-                    <div key={bank.id} className="space-y-1">
+                  distributionByType.map(item => (
+                    <div key={item.type} className="space-y-1">
                       <div className="flex justify-between text-xs font-bold">
-                        <span className="text-slate-500">{bank.name}</span>
-                        <span>{((bank.balance / (totalInvested || 1)) * 100).toFixed(1)}%</span>
+                        <span className="text-slate-500">{item.type}</span>
+                        <span>{item.percentage.toFixed(1)}%</span>
                       </div>
                       <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div 
                           className="h-full transition-all duration-1000" 
                           style={{ 
-                            width: `${(bank.balance / (totalInvested || 1)) * 100}%`,
-                            backgroundColor: bank.color
+                            width: `${item.percentage}%`,
+                            backgroundColor: item.color
                           }} 
                         />
                       </div>
@@ -215,16 +231,46 @@ const InvestmentsPage = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xl font-black text-slate-900 dark:text-white">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.balance)}
-                    </p>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-xl font-black text-slate-900 dark:text-white">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.balance)}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-slate-400 hover:text-primary"
+                        onClick={() => setEditingBank(bank)}
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-slate-400 hover:text-destructive"
+                        onClick={() => {
+                          if(confirm("Deseja remover esta conta de investimento?")) {
+                            removeBank(bank.id);
+                          }
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
+
+        <EditBankDialog 
+          bank={editingBank}
+          onUpdate={updateBank}
+          onClose={() => setEditingBank(null)}
+        />
       </main>
     </div>
   );

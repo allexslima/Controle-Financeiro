@@ -68,6 +68,8 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     return bank.type === 'account';
   });
 
+  const isInvestment = method === 'investment_apply' || method === 'investment_redeem';
+
   useEffect(() => {
     const selectedDate = parseISO(date);
     setIsCompleted(!isAfter(selectedDate, today));
@@ -81,8 +83,8 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     if (!amount) newErrors.amount = true;
     if (!bankId) newErrors.bankId = true;
     if (!date) newErrors.date = true;
-    if (!categoryId) newErrors.categoryId = true;
-    if ((method === 'transfer' || method === 'investment_apply' || method === 'investment_redeem') && !destinationBankId) {
+    if (!isInvestment && !categoryId) newErrors.categoryId = true;
+    if ((method === 'transfer' || isInvestment) && !destinationBankId) {
       newErrors.destinationBankId = true;
     }
 
@@ -95,6 +97,10 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     const [year, month, day] = date.split('-').map(Number);
     const localDate = new Date(year, month - 1, day, 12, 0, 0);
 
+    let finalCategory = categoryId;
+    if (method === 'investment_apply') finalCategory = 'cat-inv-apply';
+    if (method === 'investment_redeem') finalCategory = 'cat-inv-redeem';
+
     const newTransaction: Transaction = {
       id: Math.random().toString(36).substr(2, 9),
       description: method === 'investment_apply' ? `Aplicação: ${description}` : 
@@ -102,8 +108,8 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
       amount: parseFloat(amount),
       method,
       bankId,
-      destinationBankId: (method === 'transfer' || method === 'investment_apply' || method === 'investment_redeem') ? destinationBankId : undefined,
-      category: categoryId,
+      destinationBankId: (method === 'transfer' || isInvestment) ? destinationBankId : undefined,
+      category: finalCategory,
       date: localDate.toISOString(),
       installments: (method === 'credit' || method === 'debit') ? parseInt(installments) : undefined,
       isRecurring: isRecurring,
@@ -179,12 +185,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
                 type="button"
                 variant={method === item.id ? 'default' : 'ghost'}
                 className={`rounded-lg flex-col py-4 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
-                onClick={() => {
-                  setMethod(item.id as TransactionMethod);
-                  if (item.id === 'investment_apply' || item.id === 'investment_redeem') {
-                    setCategoryId('cat-invest');
-                  }
-                }}
+                onClick={() => setMethod(item.id as TransactionMethod)}
               >
                 <item.icon className="h-4 w-4" />
                 <span className="text-[9px]">{item.label}</span>
@@ -228,14 +229,16 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Categoria *</Label>
-            <CategorySelector 
-              value={categoryId} 
-              onChange={setCategoryId} 
-              error={errors.categoryId}
-            />
-          </div>
+          {!isInvestment && (
+            <div className="space-y-2">
+              <Label>Categoria *</Label>
+              <CategorySelector 
+                value={categoryId} 
+                onChange={setCategoryId} 
+                error={errors.categoryId}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>
@@ -254,7 +257,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
             </Select>
           </div>
 
-          {(method === 'transfer' || method === 'investment_apply' || method === 'investment_redeem') && (
+          {(method === 'transfer' || isInvestment) && (
             <div className="space-y-2">
               <Label>
                 {method === 'investment_apply' ? 'Conta de Investimento (Destino) *' : 'Conta Bancária (Destino) *'}

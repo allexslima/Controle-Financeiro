@@ -35,13 +35,11 @@ const Index = () => {
     return tDate;
   };
 
-  // Filtramos apenas contas operacionais (não investimentos) para o Dashboard
   const operationalBanks = banks.filter(b => b.type !== 'investment');
 
   const summaryData = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
     
-    // Transações que afetam o fluxo de caixa operacional
     const base = transactions.filter(t => {
       const billingMonth = getBillingMonth(t);
       const isOperational = operationalBanks.some(b => b.id === t.bankId || b.id === t.destinationBankId);
@@ -51,8 +49,8 @@ const Index = () => {
     const completed = base.filter(t => t.isCompleted)
       .reduce((acc, t) => {
         if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'investment_apply') return acc - t.amount; // Aplicação sai do operacional
-        if (t.method === 'investment_redeem') return acc + t.amount; // Resgate entra no operacional
+        if (t.method === 'investment_apply') return acc - t.amount;
+        if (t.method === 'investment_redeem') return acc + t.amount;
         if (t.method === 'transfer') return acc;
         return acc - t.amount;
       }, 0);
@@ -83,7 +81,6 @@ const Index = () => {
   }, [transactions, currentDate, banks]);
 
   const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
-
   const totalInvested = banks.filter(b => b.type === 'investment').reduce((acc, b) => acc + b.balance, 0);
 
   return (
@@ -118,7 +115,10 @@ const Index = () => {
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-primary text-primary-foreground border-none shadow-2xl shadow-primary/20 rounded-[2.5rem] overflow-hidden transition-transform hover:scale-[1.02]">
+            <Card 
+              onClick={() => navigate('/transactions', { state: { selectedDate: currentDate.toISOString() } })}
+              className="bg-primary text-primary-foreground border-none shadow-2xl shadow-primary/20 rounded-[2.5rem] overflow-hidden transition-transform hover:scale-[1.02] cursor-pointer"
+            >
               <CardContent className="pt-10 pb-8 px-8">
                 <div className="flex items-center gap-3 mb-6 opacity-70">
                   <div className="p-2 bg-white/10 rounded-xl">
