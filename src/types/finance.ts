@@ -1,4 +1,4 @@
-export type BankType = 'account' | 'credit_card';
+export type BankType = 'account' | 'credit_card' | 'investment';
 
 export interface Bank {
   id: string;
@@ -8,9 +8,10 @@ export interface Bank {
   type: BankType;
   closingDay?: number;
   dueDay?: number;
+  investmentType?: string; // Ex: CDB, Ações, FIIs...
 }
 
-export type TransactionMethod = 'debit' | 'credit' | 'income' | 'transfer';
+export type TransactionMethod = 'debit' | 'credit' | 'income' | 'transfer' | 'investment_apply' | 'investment_redeem';
 
 export interface Category {
   id: string;
@@ -24,7 +25,7 @@ export interface Transaction {
   description: string;
   amount: number;
   method: TransactionMethod;
-  category: string; // ID da categoria
+  category: string;
   date: string;
   bankId: string;
   destinationBankId?: string;

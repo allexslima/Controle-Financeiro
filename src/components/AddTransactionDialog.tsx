@@ -15,7 +15,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Plus, CreditCard, Wallet, ArrowUpCircle, ArrowLeftRight, Repeat, CheckCircle2 } from "lucide-react";
+import { 
+  Plus, 
+  CreditCard, 
+  Wallet, 
+  ArrowUpCircle, 
+  ArrowLeftRight, 
+  Repeat, 
+  CheckCircle2,
+  TrendingUp,
+  ArrowDownLeft
+} from "lucide-react";
 import { Bank, Transaction, TransactionMethod } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { format, isAfter, startOfDay, parseISO } from "date-fns";
@@ -35,7 +45,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const [method, setMethod] = useState<TransactionMethod>("debit");
   const [bankId, setBankId] = useState("");
   const [destinationBankId, setDestinationBankId] = useState("");
-  const [categoryId, setCategoryId] = useState("cat-7"); // Default Geral
+  const [categoryId, setCategoryId] = useState("cat-7");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [installments, setInstallments] = useState("1");
   const [isRecurring, setIsRecurring] = useState(false);
@@ -47,6 +57,14 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
 
   const filteredBanks = banks.filter(bank => {
     if (method === 'credit') return bank.type === 'credit_card';
+    if (method === 'investment_apply') return bank.type === 'account';
+    if (method === 'investment_redeem') return bank.type === 'investment';
+    return bank.type === 'account';
+  });
+
+  const destinationBanks = banks.filter(bank => {
+    if (method === 'investment_apply') return bank.type === 'investment';
+    if (method === 'investment_redeem') return bank.type === 'account';
     return bank.type === 'account';
   });
 
@@ -64,7 +82,9 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     if (!bankId) newErrors.bankId = true;
     if (!date) newErrors.date = true;
     if (!categoryId) newErrors.categoryId = true;
-    if (method === 'transfer' && !destinationBankId) newErrors.destinationBankId = true;
+    if ((method === 'transfer' || method === 'investment_apply' || method === 'investment_redeem') && !destinationBankId) {
+      newErrors.destinationBankId = true;
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -77,11 +97,12 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
 
     const newTransaction: Transaction = {
       id: Math.random().toString(36).substr(2, 9),
-      description: method === 'transfer' ? `Transferência: ${description}` : description,
+      description: method === 'investment_apply' ? `Aplicação: ${description}` : 
+                   method === 'investment_redeem' ? `Resgate: ${description}` : description,
       amount: parseFloat(amount),
       method,
       bankId,
-      destinationBankId: method === 'transfer' ? destinationBankId : undefined,
+      destinationBankId: (method === 'transfer' || method === 'investment_apply' || method === 'investment_redeem') ? destinationBankId : undefined,
       category: categoryId,
       date: localDate.toISOString(),
       installments: (method === 'credit' || method === 'debit') ? parseInt(installments) : undefined,
@@ -144,19 +165,26 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
             />
           </div>
 
-          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
+          <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
             {[
               { id: 'income', label: 'Receita', icon: ArrowUpCircle, color: 'bg-emerald-600' },
               { id: 'debit', label: 'Débito', icon: Wallet, color: 'bg-blue-600' },
               { id: 'credit', label: 'Crédito', icon: CreditCard, color: 'bg-purple-600' },
               { id: 'transfer', label: 'Transf.', icon: ArrowLeftRight, color: 'bg-orange-500' },
+              { id: 'investment_apply', label: 'Aplicação', icon: TrendingUp, color: 'bg-sky-600' },
+              { id: 'investment_redeem', label: 'Resgate', icon: ArrowDownLeft, color: 'bg-amber-600' },
             ].map((item) => (
               <Button
                 key={item.id}
                 type="button"
                 variant={method === item.id ? 'default' : 'ghost'}
-                className={`rounded-lg flex-col py-6 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
-                onClick={() => setMethod(item.id as TransactionMethod)}
+                className={`rounded-lg flex-col py-4 h-auto gap-1 px-1 ${method === item.id ? item.color : ''}`}
+                onClick={() => {
+                  setMethod(item.id as TransactionMethod);
+                  if (item.id === 'investment_apply' || item.id === 'investment_redeem') {
+                    setCategoryId('cat-invest');
+                  }
+                }}
               >
                 <item.icon className="h-4 w-4" />
                 <span className="text-[9px]">{item.label}</span>
@@ -210,7 +238,10 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
           </div>
 
           <div className="space-y-2">
-            <Label>{method === 'credit' ? 'Cartão de Crédito *' : 'Conta Bancária *'}</Label>
+            <Label>
+              {method === 'investment_redeem' ? 'Conta de Investimento (Origem) *' : 
+               method === 'credit' ? 'Cartão de Crédito *' : 'Conta Bancária (Origem) *'}
+            </Label>
             <Select onValueChange={setBankId} value={bankId}>
               <SelectTrigger className={cn("rounded-xl", errors.bankId && "border-destructive")}>
                 <SelectValue placeholder="Selecione" />
@@ -223,15 +254,17 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
             </Select>
           </div>
 
-          {method === 'transfer' && (
+          {(method === 'transfer' || method === 'investment_apply' || method === 'investment_redeem') && (
             <div className="space-y-2">
-              <Label>Conta de Destino *</Label>
+              <Label>
+                {method === 'investment_apply' ? 'Conta de Investimento (Destino) *' : 'Conta Bancária (Destino) *'}
+              </Label>
               <Select onValueChange={setDestinationBankId} value={destinationBankId}>
-                <SelectTrigger className={cn("rounded-xl border-orange-200 bg-orange-50/30", errors.destinationBankId && "border-destructive")}>
+                <SelectTrigger className={cn("rounded-xl border-sky-200 bg-sky-50/30", errors.destinationBankId && "border-destructive")}>
                   <SelectValue placeholder="Selecione o destino" />
                 </SelectTrigger>
                 <SelectContent>
-                  {banks.filter(b => b.type === 'account').map((bank) => (
+                  {destinationBanks.map((bank) => (
                     <SelectItem key={bank.id} value={bank.id} disabled={bank.id === bankId}>
                       {bank.name}
                     </SelectItem>

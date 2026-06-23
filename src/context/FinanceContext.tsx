@@ -43,6 +43,7 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-5', name: 'Educação', color: '#8b5cf6' },
   { id: 'cat-6', name: 'Moradia', color: '#6366f1' },
   { id: 'cat-7', name: 'Geral', color: '#94a3b8' },
+  { id: 'cat-invest', name: 'Investimentos', color: '#0ea5e9' },
 ];
 
 export const FinanceProvider = ({ children }: { children: React.ReactNode }) => {
@@ -66,39 +67,6 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   });
 
   const [history, setHistory] = useState<HistoryState[]>([]);
-
-  // Lógica de Importação via URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const importData = params.get('import');
-
-    if (importData) {
-      try {
-        const decodedData = decodeURIComponent(atob(importData).split('').map((c) => {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        
-        if (decodedData) {
-          const parsed = JSON.parse(decodedData);
-          
-          // Usamos um pequeno timeout para garantir que a UI carregou
-          setTimeout(() => {
-            if (window.confirm("Dados de backup detectados! Deseja substituir seus dados atuais por estes?")) {
-              importFullData(parsed);
-              showSuccess("Dados importados com sucesso!");
-              // Limpa a URL
-              window.history.replaceState({}, document.title, window.location.pathname);
-            } else {
-              window.history.replaceState({}, document.title, window.location.pathname);
-            }
-          }, 800);
-        }
-      } catch (err) {
-        console.error("Erro na importação:", err);
-        showError("O link de importação está corrompido ou é muito longo.");
-      }
-    }
-  }, []);
 
   useEffect(() => {
     localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
@@ -134,6 +102,28 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   const applyTransactionToBalance = (transaction: Transaction, reverse = false, currentBanks = banks) => {
     return currentBanks.map(bank => {
       const multiplier = reverse ? -1 : 1;
+      
+      // Lógica para Aplicação (Sai da conta, entra no investimento)
+      if (transaction.method === 'investment_apply') {
+        if (bank.id === transaction.bankId) {
+          return { ...bank, balance: bank.balance - (transaction.amount * multiplier) };
+        }
+        if (bank.id === transaction.destinationBankId) {
+          return { ...bank, balance: bank.balance + (transaction.amount * multiplier) };
+        }
+      }
+
+      // Lógica para Resgate (Sai do investimento, entra na conta)
+      if (transaction.method === 'investment_redeem') {
+        if (bank.id === transaction.bankId) { // bankId aqui é a conta de investimento
+          return { ...bank, balance: bank.balance - (transaction.amount * multiplier) };
+        }
+        if (bank.id === transaction.destinationBankId) { // destination é a conta corrente
+          return { ...bank, balance: bank.balance + (transaction.amount * multiplier) };
+        }
+      }
+
+      // Lógica padrão
       if (bank.id === transaction.bankId) {
         let newBalance = bank.balance;
         if (transaction.method === 'income') {

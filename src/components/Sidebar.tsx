@@ -9,7 +9,8 @@ import {
   LogOut,
   PieChart,
   BarChart3,
-  CalendarDays
+  CalendarDays,
+  TrendingUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
@@ -21,6 +22,7 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: ArrowLeftRight, label: 'Transações', path: '/transactions' },
   { icon: CalendarDays, label: 'Calendário', path: '/calendar' },
+  { icon: TrendingUp, label: 'Investimentos', path: '/investments' },
   { icon: Landmark, label: 'Contas', path: '/accounts' },
   { icon: CreditCard, label: 'Cartões', path: '/cards' },
   { icon: BarChart3, label: 'Relatórios', path: '/report' },
