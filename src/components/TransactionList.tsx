@@ -20,7 +20,8 @@ interface TransactionListProps {
 const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const getBankName = (id: string) => banks.find(b => b.id === id)?.name || "Conta removida";
+  const getBank = (id: string) => banks.find(b => b.id === id);
+  const getBankName = (id: string) => getBank(id)?.name || "Conta removida";
 
   const getMethodIcon = (method: string) => {
     switch (method) {
@@ -28,6 +29,8 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
       case 'debit': return <Wallet size={20} className="text-blue-600" />;
       case 'credit': return <CreditCard size={20} className="text-purple-600" />;
       case 'transfer': return <ArrowLeftRight size={20} className="text-orange-500" />;
+      case 'investment_apply': return <ArrowLeftRight size={20} className="text-sky-600" />;
+      case 'investment_redeem': return <ArrowLeftRight size={20} className="text-amber-600" />;
       default: return <Wallet size={20} />;
     }
   };
@@ -44,68 +47,82 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
     return { completed, pending };
   }, [filteredTransactions]);
 
-  const renderItem = (transaction: Transaction, isPending: boolean) => (
-    <SwipeableTransactionItem 
-      key={transaction.id}
-      onDelete={() => onDelete(transaction.id)}
-      onEdit={() => onEdit(transaction)}
-    >
-      <div className={cn(
-        "p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center justify-between group",
-        isPending && "opacity-60 grayscale-[0.5] bg-slate-50/50 dark:bg-slate-900/50"
-      )}>
-        <div className="flex items-center gap-4">
-          <div className="flex flex-col items-center justify-center min-w-[24px]">
-            {isPending ? (
-              <Clock size={18} className="text-slate-400" />
-            ) : (
-              <CheckCircle2 size={18} className="text-emerald-500" />
-            )}
+  const renderItem = (transaction: Transaction, isPending: boolean) => {
+    const destBank = transaction.destinationBankId ? getBank(transaction.destinationBankId) : null;
+    const isCardPayment = transaction.method === 'transfer' && destBank?.type === 'credit_card';
+    
+    // Se for pagamento de fatura e estivermos vendo o cartão, mostrar "Pagamento Recebido"
+    const displayDescription = isCardPayment ? "Pagamento Recebido" : transaction.description;
+
+    return (
+      <SwipeableTransactionItem 
+        key={transaction.id}
+        onDelete={() => onDelete(transaction.id)}
+        onEdit={() => onEdit(transaction)}
+      >
+        <div className={cn(
+          "p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center justify-between group",
+          isPending && "opacity-60 grayscale-[0.5] bg-slate-50/50 dark:bg-slate-900/50"
+        )}>
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col items-center justify-center min-w-[24px]">
+              {isPending ? (
+                <Clock size={18} className="text-slate-400" />
+              ) : (
+                <CheckCircle2 size={18} className="text-emerald-500" />
+              )}
+            </div>
+            <div className={cn("p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm")}>
+              {getMethodIcon(transaction.method)}
+            </div>
+            <div>
+              <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{displayDescription}</p>
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                <span className="font-medium">
+                  {transaction.method === 'transfer' || transaction.method === 'investment_apply' || transaction.method === 'investment_redeem'
+                    ? `${getBankName(transaction.bankId)} → ${getBankName(transaction.destinationBankId!)}`
+                    : getBankName(transaction.bankId)}
+                </span>
+                {transaction.category && (
+                  <>
+                    <span>•</span>
+                    <span>{transaction.category}</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-          <div className={cn("p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm")}>
-            {getMethodIcon(transaction.method)}
-          </div>
-          <div>
-            <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{transaction.description}</p>
-            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-              <span className="font-medium">
-                {transaction.method === 'transfer' 
-                  ? `${getBankName(transaction.bankId)} → ${getBankName(transaction.destinationBankId!)}`
-                  : getBankName(transaction.bankId)}
-              </span>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className={cn(
+                "font-black text-sm",
+                transaction.method === 'income' ? 'text-emerald-600' : 
+                (transaction.method === 'transfer' || transaction.method === 'investment_redeem') ? 'text-orange-500' : 'text-rose-600'
+              )}>
+                {transaction.method === 'income' ? '+' : 
+                 (transaction.method === 'transfer' || transaction.method === 'investment_redeem' || transaction.method === 'investment_apply') ? '' : '-'} 
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
+              </p>
+              <p className="text-[9px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1 font-medium">
+                <Calendar size={10} />
+                {format(parseISO(transaction.date), "dd 'de' MMM", { locale: ptBR })}
+              </p>
+            </div>
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-slate-400 hover:text-primary"
+                onClick={() => onEdit(transaction)}
+              >
+                <Pencil size={14} />
+              </Button>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className={cn(
-              "font-black text-sm",
-              transaction.method === 'income' ? 'text-emerald-600' : 
-              transaction.method === 'transfer' ? 'text-orange-500' : 'text-rose-600'
-            )}>
-              {transaction.method === 'income' ? '+' : 
-               transaction.method === 'transfer' ? '' : '-'} 
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(transaction.amount)}
-            </p>
-            <p className="text-[9px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1 font-medium">
-              <Calendar size={10} />
-              {format(parseISO(transaction.date), "dd 'de' MMM", { locale: ptBR })}
-            </p>
-          </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 text-slate-400 hover:text-primary"
-              onClick={() => onEdit(transaction)}
-            >
-              <Pencil size={14} />
-            </Button>
-          </div>
-        </div>
-      </div>
-    </SwipeableTransactionItem>
-  );
+      </SwipeableTransactionItem>
+    );
+  };
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden border border-slate-100 dark:border-slate-800">
@@ -114,7 +131,7 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input 
             placeholder="Buscar transação..." 
-            className="pl-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none focus-visible:ring-primary"
+            className="pl-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-900 border-none focus-visible:ring-primary"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />

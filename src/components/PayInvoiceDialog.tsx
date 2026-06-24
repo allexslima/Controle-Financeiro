@@ -26,7 +26,6 @@ interface PayInvoiceDialogProps {
 
 const PayInvoiceDialog = ({ card, banks, onPay }: PayInvoiceDialogProps) => {
   const [open, setOpen] = useState(false);
-  // Limitando a 2 casas decimais no valor inicial
   const [amount, setAmount] = useState(card.balance.toFixed(2));
   const [sourceBankId, setSourceBankId] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -43,13 +42,14 @@ const PayInvoiceDialog = ({ card, banks, onPay }: PayInvoiceDialogProps) => {
 
     const paymentTransaction: Transaction = {
       id: Math.random().toString(36).substr(2, 9),
-      description: `Pagamento Fatura: ${card.name}`,
+      description: `Pagamento de Fatura`,
       amount: payAmount,
       method: 'transfer',
       bankId: sourceBankId,
       destinationBankId: card.id,
-      category: "Pagamento de Cartão",
+      category: "", // Sem categoria conforme solicitado
       date: new Date(date).toISOString(),
+      isCompleted: true, // Pagamento de fatura geralmente é imediato
     };
 
     onPay(paymentTransaction);

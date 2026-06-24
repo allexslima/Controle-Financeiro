@@ -40,42 +40,37 @@ const Index = () => {
   const summaryData = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
     
-    const base = transactions.filter(t => {
+    const calculateBalance = (tList: Transaction[]) => {
+      return tList.reduce((acc, t) => {
+        const isOriginOp = operationalBanks.some(b => b.id === t.bankId);
+        const isDestOp = operationalBanks.some(b => b.id === t.destinationBankId);
+
+        if (t.method === 'income') return isOriginOp ? acc + t.amount : acc;
+        
+        if (t.method === 'transfer' || t.method === 'investment_apply' || t.method === 'investment_redeem') {
+          let balance = acc;
+          if (isOriginOp && !isDestOp) balance -= t.amount;
+          if (!isOriginOp && isDestOp) balance += t.amount;
+          return balance;
+        }
+
+        // Débitos e Créditos (saídas das contas operacionais)
+        return isOriginOp ? acc - t.amount : acc;
+      }, 0);
+    };
+
+    const baseTransactions = transactions.filter(t => {
       const billingMonth = getBillingMonth(t);
-      const isOperational = operationalBanks.some(b => b.id === t.bankId || b.id === t.destinationBankId);
-      return isSameMonth(billingMonth, currentDate) && isOperational;
+      return isSameMonth(billingMonth, currentDate);
     });
 
-    const completed = base.filter(t => t.isCompleted)
-      .reduce((acc, t) => {
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'investment_apply') return acc - t.amount;
-        if (t.method === 'investment_redeem') return acc + t.amount;
-        if (t.method === 'transfer') return acc;
-        return acc - t.amount;
-      }, 0);
-    
-    const future = base.filter(t => !t.isCompleted)
-      .reduce((acc, t) => {
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'investment_apply') return acc - t.amount;
-        if (t.method === 'investment_redeem') return acc + t.amount;
-        if (t.method === 'transfer') return acc;
-        return acc - t.amount;
-      }, 0);
+    const previousTransactions = transactions.filter(t => 
+      isBefore(getBillingMonth(t), monthStart)
+    );
 
-    const previousBalance = transactions
-      .filter(t => {
-        const isOperational = operationalBanks.some(b => b.id === t.bankId || b.id === t.destinationBankId);
-        return isBefore(getBillingMonth(t), monthStart) && isOperational;
-      })
-      .reduce((acc, t) => {
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'investment_apply') return acc - t.amount;
-        if (t.method === 'investment_redeem') return acc + t.amount;
-        if (t.method === 'transfer') return acc;
-        return acc - t.amount;
-      }, 0);
+    const completed = calculateBalance(baseTransactions.filter(t => t.isCompleted));
+    const future = calculateBalance(baseTransactions.filter(t => !t.isCompleted));
+    const previousBalance = calculateBalance(previousTransactions);
 
     return { completed, future, previousBalance };
   }, [transactions, currentDate, banks]);

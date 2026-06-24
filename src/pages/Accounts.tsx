@@ -37,58 +37,37 @@ const AccountsPage = () => {
   const getBankSummary = (bank: Bank) => {
     const monthStart = startOfMonth(currentDate);
 
-    const previousBalance = transactions
-      .filter(t => 
-        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
-        isBefore(parseISO(t.date), monthStart)
-      )
-      .reduce((acc, t) => {
+    const calculateBalance = (tList: Transaction[]) => {
+      return tList.reduce((acc, t) => {
         const isOrigin = t.bankId === bank.id;
         const isDest = t.destinationBankId === bank.id;
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') {
-          if (isOrigin && !isDest) return acc - t.amount;
-          if (!isOrigin && isDest) return acc + t.amount;
-          return acc;
-        }
-        return acc - t.amount;
-      }, 0);
 
-    const completedMonth = transactions
-      .filter(t => 
-        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
-        isSameMonth(parseISO(t.date), currentDate) &&
-        t.isCompleted
-      )
-      .reduce((acc, t) => {
-        const isOrigin = t.bankId === bank.id;
-        const isDest = t.destinationBankId === bank.id;
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') {
+        if (t.method === 'income') return isOrigin ? acc + t.amount : acc;
+        
+        if (t.method === 'transfer' || t.method === 'investment_apply' || t.method === 'investment_redeem') {
           if (isOrigin && !isDest) return acc - t.amount;
           if (!isOrigin && isDest) return acc + t.amount;
           return acc;
         }
-        return acc - t.amount;
-      }, 0);
 
-    const futureMonth = transactions
-      .filter(t => 
-        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
-        isSameMonth(parseISO(t.date), currentDate) &&
-        !t.isCompleted
-      )
-      .reduce((acc, t) => {
-        const isOrigin = t.bankId === bank.id;
-        const isDest = t.destinationBankId === bank.id;
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') {
-          if (isOrigin && !isDest) return acc - t.amount;
-          if (!isOrigin && isDest) return acc + t.amount;
-          return acc;
-        }
-        return acc - t.amount;
+        // Débitos e Créditos (saídas da conta)
+        return isOrigin ? acc - t.amount : acc;
       }, 0);
+    };
+
+    const previousTransactions = transactions.filter(t => 
+      (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+      isBefore(parseISO(t.date), monthStart)
+    );
+
+    const currentMonthTransactions = transactions.filter(t => 
+      (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+      isSameMonth(parseISO(t.date), currentDate)
+    );
+
+    const previousBalance = calculateBalance(previousTransactions);
+    const completedMonth = calculateBalance(currentMonthTransactions.filter(t => t.isCompleted));
+    const futureMonth = calculateBalance(currentMonthTransactions.filter(t => !t.isCompleted));
 
     const currentBalance = previousBalance + completedMonth;
     const projectedTotal = currentBalance + futureMonth;
