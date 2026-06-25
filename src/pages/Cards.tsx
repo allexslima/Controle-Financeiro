@@ -14,7 +14,7 @@ import PayInvoiceDialog from "@/components/PayInvoiceDialog";
 import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import { Bank, Transaction } from "@/types/finance";
-import { isSameMonth, parseISO, getDate, addMonths } from "date-fns";
+import { isSameMonth, parseISO, getDate, addMonths, isBefore, startOfMonth } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Pencil } from "lucide-react";
 
@@ -68,28 +68,31 @@ const CardsPage = () => {
   }, [transactions, selectedCard, currentDate]);
 
   const summaryData = useMemo(() => {
-    if (!selectedCard) return { completed: 0, future: 0 };
+    if (!selectedCard) return { completed: 0, future: 0, previous: 0 };
     
-    const completed = filteredTransactions
-      .filter(t => t.isCompleted)
-      .reduce((acc, t) => {
+    const monthStart = startOfMonth(currentDate);
+
+    const calculateBalance = (tList: Transaction[]) => {
+      return tList.reduce((acc, t) => {
         if (t.method === 'credit') return acc - t.amount;
         if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
         return acc;
       }, 0);
+    };
 
-    const future = filteredTransactions
-      .filter(t => !t.isCompleted)
-      .reduce((acc, t) => {
-        if (t.method === 'credit') return acc - t.amount;
-        if (t.method === 'transfer' && t.destinationBankId === selectedCard.id) return acc + t.amount;
-        return acc;
-      }, 0);
+    const previousTransactions = transactions.filter(t => {
+      if (t.bankId !== selectedCard.id && t.destinationBankId !== selectedCard.id) return false;
+      return isBefore(getBillingMonth(t, selectedCard), monthStart);
+    });
 
-    return { completed, future };
-  }, [filteredTransactions, selectedCard]);
+    const previous = calculateBalance(previousTransactions);
+    const completed = calculateBalance(filteredTransactions.filter(t => t.isCompleted));
+    const future = calculateBalance(filteredTransactions.filter(t => !t.isCompleted));
 
-  const grandTotal = summaryData.completed + summaryData.future;
+    return { completed, future, previous };
+  }, [filteredTransactions, transactions, selectedCard, currentDate]);
+
+  const grandTotal = summaryData.completed + summaryData.future + summaryData.previous;
 
   const handleDeleteRequest = (id: string) => {
     const t = transactions.find(item => item.id === id);
@@ -212,6 +215,12 @@ const CardsPage = () => {
                   <span>Valores Futuros (Mês)</span>
                   <span className={summaryData.future >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-medium text-slate-500">
+                  <span>Saldo Mês Anterior</span>
+                  <span className={summaryData.previous >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.previous)}
                   </span>
                 </div>
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
