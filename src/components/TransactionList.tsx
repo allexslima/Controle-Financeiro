@@ -2,7 +2,19 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction, Bank } from "@/types/finance";
-import { ArrowUpCircle, Wallet, CreditCard, Calendar, ArrowLeftRight, Pencil, Search, CheckCircle2, Clock } from "lucide-react";
+import { 
+  ArrowUpCircle, 
+  Wallet, 
+  CreditCard, 
+  Calendar, 
+  ArrowLeftRight, 
+  Pencil, 
+  Search, 
+  CheckCircle2, 
+  Clock,
+  Repeat,
+  Layers
+} from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -51,6 +63,10 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
     const destBank = transaction.destinationBankId ? getBank(transaction.destinationBankId) : null;
     const isCardPayment = transaction.method === 'transfer' && destBank?.type === 'credit_card';
     
+    const isInstallment = transaction.installments && transaction.installments > 1;
+    const isRecurring = transaction.isRecurring;
+    const hasHighlight = isInstallment || isRecurring;
+
     // Se for pagamento de fatura e estivermos vendo o cartão, mostrar "Pagamento Recebido"
     const displayDescription = isCardPayment ? "Pagamento Recebido" : transaction.description;
 
@@ -61,8 +77,9 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
         onEdit={() => onEdit(transaction)}
       >
         <div className={cn(
-          "p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center justify-between group",
-          isPending && "opacity-60 grayscale-[0.5] bg-slate-50/50 dark:bg-slate-900/50"
+          "p-4 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-all flex items-center justify-between group",
+          isPending && "opacity-60 grayscale-[0.5] bg-slate-50/50 dark:bg-slate-900/50",
+          hasHighlight && !isPending && "bg-slate-50/80 dark:bg-slate-800/30"
         )}>
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-center justify-center min-w-[24px]">
@@ -72,11 +89,25 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
                 <CheckCircle2 size={18} className="text-emerald-500" />
               )}
             </div>
-            <div className={cn("p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm")}>
+            <div className={cn("p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm relative")}>
               {getMethodIcon(transaction.method)}
+              {isRecurring && (
+                <div className="absolute -top-1 -right-1 bg-primary text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800">
+                  <Repeat size={8} />
+                </div>
+              )}
+              {isInstallment && !isRecurring && (
+                <div className="absolute -top-1 -right-1 bg-slate-500 text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800">
+                  <Layers size={8} />
+                </div>
+              )}
             </div>
             <div>
-              <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{displayDescription}</p>
+              <div className="flex items-center gap-2">
+                <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{displayDescription}</p>
+                {isRecurring && <span className="text-[8px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">Recorrente</span>}
+                {isInstallment && <span className="text-[8px] font-black uppercase tracking-tighter bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md">Parcelado</span>}
+              </div>
               <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
                 <span className="font-medium">
                   {transaction.method === 'transfer' || transaction.method === 'investment_apply' || transaction.method === 'investment_redeem'
