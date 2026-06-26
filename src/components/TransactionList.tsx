@@ -77,9 +77,9 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
         onEdit={() => onEdit(transaction)}
       >
         <div className={cn(
-          "p-4 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-all flex items-center justify-between group",
+          "p-4 hover:bg-slate-200/50 dark:hover:bg-slate-800/80 transition-all flex items-center justify-between group",
           isPending && "opacity-60 grayscale-[0.5] bg-slate-50/50 dark:bg-slate-900/50",
-          hasHighlight && !isPending && "bg-slate-50/80 dark:bg-slate-800/30"
+          hasHighlight && !isPending && "bg-slate-100 dark:bg-slate-800/60"
         )}>
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-center justify-center min-w-[24px]">
@@ -106,7 +106,7 @@ const TransactionList = ({ transactions, banks, onEdit, onDelete }: TransactionL
               <div className="flex items-center gap-2">
                 <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{displayDescription}</p>
                 {isRecurring && <span className="text-[8px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">Recorrente</span>}
-                {isInstallment && <span className="text-[8px] font-black uppercase tracking-tighter bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md">Parcelado</span>}
+                {isInstallment && <span className="text-[8px] font-black uppercase tracking-tighter bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md">Parcelado</span>}
               </div>
               <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
                 <span className="font-medium">
