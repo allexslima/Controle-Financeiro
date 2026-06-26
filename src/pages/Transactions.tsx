@@ -12,8 +12,7 @@ import { useFinance } from "@/context/FinanceContext";
 import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } from "date-fns";
 import { Transaction, Bank } from "@/types/finance";
 import { useLocation } from "react-router-dom";
-import { ChevronDown, ChevronUp, CreditCard, ReceiptText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronDown, ChevronUp, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TransactionsPage = () => {
@@ -55,10 +54,9 @@ const TransactionsPage = () => {
         if (!creditGroups[t.bankId]) creditGroups[t.bankId] = { transactions: [], payments: 0 };
         creditGroups[t.bankId].transactions.push(t);
       } else if (t.method === 'transfer' && banks.find(b => b.id === t.destinationBankId)?.type === 'credit_card') {
-        // É um pagamento de fatura
         if (!creditGroups[t.destinationBankId!]) creditGroups[t.destinationBankId!] = { transactions: [], payments: 0 };
         creditGroups[t.destinationBankId!].payments += t.amount;
-        normalTransactions.push(t); // Mantemos o pagamento na lista pois ele saiu de uma conta
+        normalTransactions.push(t);
       } else {
         normalTransactions.push(t);
       }
@@ -66,6 +64,31 @@ const TransactionsPage = () => {
 
     return { normalTransactions, creditGroups };
   }, [transactions, currentDate, banks]);
+
+  const summaryData = useMemo(() => {
+    const monthStart = startOfMonth(currentDate);
+    const baseTransactions = transactions.filter(t => isSameMonth(getBillingMonth(t), currentDate));
+
+    const calculateBalance = (tList: Transaction[]) => {
+      return tList.reduce((acc, t) => {
+        if (t.method === 'income') return acc + t.amount;
+        if (t.method === 'transfer') return acc;
+        return acc - t.amount;
+      }, 0);
+    };
+
+    const completed = calculateBalance(baseTransactions.filter(t => t.isCompleted));
+    const future = calculateBalance(baseTransactions.filter(t => !t.isCompleted));
+    
+    const previousTransactions = transactions.filter(t => 
+      isBefore(getBillingMonth(t), monthStart)
+    );
+    const previousBalance = calculateBalance(previousTransactions);
+
+    return { completed, future, previousBalance };
+  }, [transactions, currentDate, banks]);
+
+  const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
 
   const toggleFatura = (bankId: string) => {
     setExpandedFaturas(prev => ({ ...prev, [bankId]: !prev[bankId] }));
@@ -115,7 +138,6 @@ const TransactionsPage = () => {
           </header>
 
           <div className="space-y-4">
-            {/* Seção de Faturas Agrupadas */}
             {Object.entries(processedData.creditGroups).map(([bankId, group]) => {
               const bank = banks.find(b => b.id === bankId);
               const totalPurchases = group.transactions.reduce((acc, t) => acc + t.amount, 0);
@@ -166,7 +188,6 @@ const TransactionsPage = () => {
               );
             })}
 
-            {/* Lista de Transações Normais (Débito, Receita, Pagamentos) */}
             <div className="space-y-2">
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 px-4 mb-2">Movimentações de Conta</h3>
               <TransactionList 
@@ -175,6 +196,34 @@ const TransactionsPage = () => {
                 onEdit={setEditingTransaction} 
                 onDelete={handleDeleteRequest}
               />
+            </div>
+          </div>
+
+          {/* Card de Resumo Financeiro */}
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
+            <div className="flex justify-between text-sm font-medium text-slate-500">
+              <span>Valores Efetuados (Mês)</span>
+              <span className={summaryData.completed >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.completed)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm font-medium text-slate-500">
+              <span>Valores Futuros (Mês)</span>
+              <span className={summaryData.future >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.future)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm font-medium text-slate-500">
+              <span>Saldo Mês Anterior</span>
+              <span className={summaryData.previousBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.previousBalance)}
+              </span>
+            </div>
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <span className="text-lg font-black text-slate-900 dark:text-white">Total Geral</span>
+              <span className={`text-2xl font-black ${grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
+              </span>
             </div>
           </div>
         </div>
