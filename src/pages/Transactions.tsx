@@ -34,7 +34,6 @@ const TransactionsPage = () => {
     updatedData?: Transaction
   } | null>(null);
 
-  // Limpa o estado da navegação após carregar para não resetar o mês ao atualizar a página
   useEffect(() => {
     if (location.state?.selectedDate) {
       window.history.replaceState({}, document.title);
@@ -55,41 +54,13 @@ const TransactionsPage = () => {
   };
 
   const filteredTransactions = useMemo(() => {
-    const base = transactions.filter(t => {
-      const billingMonth = getBillingMonth(t);
-      return isSameMonth(billingMonth, currentDate);
-    });
-
-    const nonCredit = base.filter(t => t.method !== 'credit');
-    const creditByBank = base.filter(t => t.method === 'credit').reduce((acc, t) => {
-      if (!acc[t.bankId]) acc[t.bankId] = { amount: 0, count: 0 };
-      acc[t.bankId].amount += t.amount;
-      acc[t.bankId].count += 1;
-      return acc;
-    }, {} as Record<string, { amount: number, count: number }>);
-
-    const groupedCredit: Transaction[] = Object.entries(creditByBank).map(([bankId, data]) => {
-      const bank = banks.find(b => b.id === bankId);
-      return {
-        id: `group-${bankId}`,
-        description: `Fatura ${bank?.name || 'Cartão'}`,
-        amount: data.amount,
-        method: 'credit',
-        category: 'Cartão de Crédito',
-        date: currentDate.toISOString(),
-        bankId: bankId,
-        isCompleted: false,
-      };
-    });
-
-    return [...nonCredit, ...groupedCredit].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Agora mostramos todas as transações individualmente, sem agrupar por fatura
+    return transactions
+      .filter(t => isSameMonth(getBillingMonth(t), currentDate))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, currentDate, banks]);
 
   const handleEditRequest = (t: Transaction) => {
-    if (t.id.startsWith('group-')) {
-      navigate('/cards');
-      return;
-    }
     setEditingTransaction(t);
   };
 
@@ -103,7 +74,6 @@ const TransactionsPage = () => {
   };
 
   const handleDeleteRequest = (id: string) => {
-    if (id.startsWith('group-')) return;
     const t = transactions.find(item => item.id === id);
     if (t?.groupId) {
       setPendingAction({ type: 'delete', transaction: t });
