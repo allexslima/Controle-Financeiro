@@ -24,6 +24,8 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
   const [balance, setBalance] = useState("");
   const [color, setColor] = useState("");
   const [closingDay, setClosingDay] = useState("");
+  const [yieldRate, setYieldRate] = useState("");
+  const [yieldAmount, setYieldAmount] = useState("");
 
   useEffect(() => {
     if (bank) {
@@ -31,6 +33,8 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
       setBalance(bank.balance.toString());
       setColor(bank.color);
       setClosingDay(bank.closingDay?.toString() || "");
+      setYieldRate(bank.yieldRate?.toString() || "");
+      setYieldAmount(bank.yieldAmount?.toString() || "");
     }
   }, [bank]);
 
@@ -44,6 +48,8 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
       balance: parseFloat(balance),
       color,
       closingDay: bank.type === 'credit_card' ? parseInt(closingDay) : undefined,
+      yieldRate: bank.type === 'investment' && yieldRate ? parseFloat(yieldRate) : undefined,
+      yieldAmount: bank.type === 'investment' && yieldAmount ? parseFloat(yieldAmount) : undefined,
     };
 
     onUpdate(updatedBank);
@@ -54,7 +60,9 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
     <Dialog open={!!bank} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px] rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Editar {bank?.type === 'account' ? 'Conta' : 'Cartão'}</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">
+            Editar {bank?.type === 'account' ? 'Conta' : bank?.type === 'credit_card' ? 'Cartão' : 'Investimento'}
+          </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
@@ -71,7 +79,7 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
           
           <div className="space-y-2">
             <Label htmlFor="edit-bank-balance">
-              {bank?.type === 'account' ? 'Saldo Atual (R$)' : 'Limite Utilizado (R$)'}
+              {bank?.type === 'account' ? 'Saldo Atual (R$)' : bank?.type === 'credit_card' ? 'Limite Utilizado (R$)' : 'Valor Aplicado (R$)'}
             </Label>
             <Input
               id="edit-bank-balance"
@@ -97,6 +105,35 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
                 className="rounded-xl"
                 required
               />
+            </div>
+          )}
+
+          {bank?.type === 'investment' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-bank-yield-rate">Taxa Rendimento (% a.a.)</Label>
+                <Input
+                  id="edit-bank-yield-rate"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 12.5"
+                  value={yieldRate}
+                  onChange={(e) => setYieldRate(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-bank-yield-amount">Rendimento Acumulado (R$)</Label>
+                <Input
+                  id="edit-bank-yield-amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 150.00"
+                  value={yieldAmount}
+                  onChange={(e) => setYieldAmount(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
             </div>
           )}
 

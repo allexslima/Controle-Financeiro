@@ -9,6 +9,8 @@ export interface Bank {
   closingDay?: number;
   dueDay?: number;
   investmentType?: string; // Ex: CDB, Ações, FIIs...
+  yieldRate?: number;      // Taxa de rendimento em %
+  yieldAmount?: number;    // Valor do rendimento em R$
 }
 
 export type TransactionMethod = 'debit' | 'credit' | 'income' | 'transfer' | 'investment_apply' | 'investment_redeem';

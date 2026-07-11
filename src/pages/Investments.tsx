@@ -17,7 +17,8 @@ import {
   Landmark,
   Pencil,
   Trash2,
-  ArrowLeft
+  ArrowLeft,
+  Coins
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,9 +59,12 @@ const InvestmentsPage = () => {
   const [newType, setNewType] = useState("CDB");
   const [newBalance, setNewBalance] = useState("");
   const [newColor, setNewColor] = useState("#0ea5e9");
+  const [newYieldRate, setNewYieldRate] = useState("");
+  const [newYieldAmount, setNewYieldAmount] = useState("");
 
   const investmentBanks = banks.filter(b => b.type === 'investment');
   const totalInvested = investmentBanks.reduce((acc, b) => acc + b.balance, 0);
+  const totalYields = investmentBanks.reduce((acc, b) => acc + (b.yieldAmount || 0), 0);
 
   // Lógica para a visão detalhada
   const getInvestmentSummary = (bank: Bank) => {
@@ -71,9 +75,6 @@ const InvestmentsPage = () => {
         const isOrigin = t.bankId === bank.id;
         const isDest = t.destinationBankId === bank.id;
 
-        // Para uma conta de investimento:
-        // investment_apply com destino nela = Entrada (+)
-        // investment_redeem com origem nela = Saída (-)
         if (t.method === 'investment_apply') {
           if (isDest) return acc + t.amount;
           if (isOrigin) return acc - t.amount;
@@ -83,7 +84,6 @@ const InvestmentsPage = () => {
           if (isDest) return acc + t.amount;
         }
         
-        // Outras transferências
         if (t.method === 'transfer') {
           if (isDest) return acc + t.amount;
           if (isOrigin) return acc - t.amount;
@@ -150,13 +150,17 @@ const InvestmentsPage = () => {
       balance: parseFloat(newBalance) || 0,
       color: newColor,
       type: 'investment',
-      investmentType: newType
+      investmentType: newType,
+      yieldRate: newYieldRate ? parseFloat(newYieldRate) : undefined,
+      yieldAmount: newYieldAmount ? parseFloat(newYieldAmount) : undefined
     };
     addBank(bank);
     showSuccess("Conta de investimento criada!");
     setIsAddAccountOpen(false);
     setNewName("");
     setNewBalance("");
+    setNewYieldRate("");
+    setNewYieldAmount("");
   };
 
   const handleDeleteRequest = (id: string) => {
@@ -255,6 +259,32 @@ const InvestmentsPage = () => {
                             />
                           </div>
                         </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Taxa Rendimento (% a.a.)</Label>
+                            <Input 
+                              type="number" 
+                              step="0.01"
+                              placeholder="Ex: 12.5"
+                              value={newYieldRate}
+                              onChange={(e) => setNewYieldRate(e.target.value)}
+                              className="rounded-xl"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Rendimento Inicial (R$)</Label>
+                            <Input 
+                              type="number" 
+                              step="0.01"
+                              placeholder="Ex: 0.00"
+                              value={newYieldAmount}
+                              onChange={(e) => setNewYieldAmount(e.target.value)}
+                              className="rounded-xl"
+                            />
+                          </div>
+                        </div>
+
                         <div className="space-y-2">
                           <Label>Cor de Identificação</Label>
                           <Input 
@@ -277,18 +307,32 @@ const InvestmentsPage = () => {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card className="lg:col-span-2 bg-slate-900 text-white border-none shadow-2xl rounded-[2.5rem] overflow-hidden relative">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-sky-500/10 rounded-full -mr-32 -mt-32 blur-3xl" />
-                  <CardContent className="p-10 relative z-10">
-                    <div className="flex items-center gap-3 mb-8 opacity-60">
-                      <TrendingUp size={20} />
-                      <span className="text-xs font-black uppercase tracking-[0.2em]">Patrimônio Total Investido</span>
+                  <CardContent className="p-10 relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                    <div>
+                      <div className="flex items-center gap-3 mb-4 opacity-60">
+                        <TrendingUp size={20} />
+                        <span className="text-xs font-black uppercase tracking-[0.2em]">Patrimônio Total Investido</span>
+                      </div>
+                      <h2 className="text-5xl font-black mb-2">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalInvested)}
+                      </h2>
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                        <ArrowUpRight size={16} />
+                        <span>Seu dinheiro trabalhando para você</span>
+                      </div>
                     </div>
-                    <h2 className="text-5xl font-black mb-2">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalInvested)}
-                    </h2>
-                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-                      <ArrowUpRight size={16} />
-                      <span>Seu dinheiro trabalhando para você</span>
-                    </div>
+
+                    {totalYields > 0 && (
+                      <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10">
+                        <div className="flex items-center gap-2 text-emerald-400 mb-1">
+                          <Coins size={16} />
+                          <span className="text-[10px] font-black uppercase tracking-wider">Rendimento Total</span>
+                        </div>
+                        <p className="text-2xl font-black text-emerald-400">
+                          + {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalYields)}
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -340,9 +384,16 @@ const InvestmentsPage = () => {
                         </div>
                         <div>
                           <p className="font-black text-slate-900 dark:text-white">{bank.name}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            {bank.investmentType}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              {bank.investmentType}
+                            </span>
+                            {bank.yieldRate !== undefined && (
+                              <span className="text-[10px] font-black text-sky-600 bg-sky-50 dark:bg-sky-950/50 px-1.5 py-0.5 rounded">
+                                {bank.yieldRate}% a.a.
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
@@ -350,6 +401,11 @@ const InvestmentsPage = () => {
                           <p className="text-xl font-black text-slate-900 dark:text-white">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.balance)}
                           </p>
+                          {bank.yieldAmount !== undefined && bank.yieldAmount > 0 && (
+                            <p className="text-xs text-emerald-600 font-bold">
+                              + {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.yieldAmount)}
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button 
@@ -406,6 +462,11 @@ const InvestmentsPage = () => {
                   <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-black uppercase tracking-widest text-slate-500">
                     {selectedInvestment.investmentType}
                   </span>
+                  {selectedInvestment.yieldRate !== undefined && (
+                    <span className="px-3 py-1 rounded-full bg-sky-50 dark:bg-sky-950/50 text-[10px] font-black text-sky-600">
+                      {selectedInvestment.yieldRate}% a.a.
+                    </span>
+                  )}
                 </div>
                 <div className="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                   <div>
@@ -413,6 +474,11 @@ const InvestmentsPage = () => {
                     <p className="text-4xl font-black text-slate-900 dark:text-white">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.currentBalance || 0)}
                     </p>
+                    {selectedInvestment.yieldAmount !== undefined && selectedInvestment.yieldAmount > 0 && (
+                      <p className="text-sm text-emerald-600 font-bold mt-1">
+                        Rendimento Acumulado: + {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedInvestment.yieldAmount)}
+                      </p>
+                    )}
                   </div>
                   <div className="text-left sm:text-right">
                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Total Geral (Projeção)</p>
