@@ -92,7 +92,8 @@ const InvestmentsPage = () => {
   }, []);
 
   const investmentBanks = banks.filter(b => b.type === 'investment');
-  const totalInvested = investmentBanks.reduce((acc, b) => acc + b.balance, 0);
+  // O total investido agora soma o saldo aplicado + rendimentos acumulados
+  const totalInvested = investmentBanks.reduce((acc, b) => acc + b.balance + (b.yieldAmount || 0), 0);
   const totalYields = investmentBanks.reduce((acc, b) => acc + (b.yieldAmount || 0), 0);
 
   // Função auxiliar para calcular a taxa de rendimento anual efetiva
@@ -145,7 +146,8 @@ const InvestmentsPage = () => {
     const completedMonth = calculateBalance(currentMonthTransactions.filter(t => t.isCompleted));
     const futureMonth = calculateBalance(currentMonthTransactions.filter(t => !t.isCompleted));
 
-    const currentBalance = previousBalance + completedMonth;
+    // Soma o rendimento acumulado ao saldo atualizado pelas transações
+    const currentBalance = previousBalance + completedMonth + (bank.yieldAmount || 0);
     const projectedTotal = currentBalance + futureMonth;
 
     return { previousBalance, completedMonth, futureMonth, currentBalance, projectedTotal };
@@ -171,7 +173,8 @@ const InvestmentsPage = () => {
       if (!groups[type]) {
         groups[type] = { amount: 0, color: bank.color };
       }
-      groups[type].amount += bank.balance;
+      // Soma saldo + rendimento na distribuição por tipo
+      groups[type].amount += bank.balance + (bank.yieldAmount || 0);
     });
     return Object.entries(groups).map(([type, data]) => ({
       type,
@@ -463,8 +466,9 @@ const InvestmentsPage = () => {
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
+                            {/* Exibe o valor total (saldo + rendimento) */}
                             <p className="text-xl font-black text-slate-900 dark:text-white">
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.balance)}
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.balance + (bank.yieldAmount || 0))}
                             </p>
                             {bank.yieldAmount !== undefined && bank.yieldAmount > 0 && (
                               <p className="text-xs text-emerald-600 font-bold">

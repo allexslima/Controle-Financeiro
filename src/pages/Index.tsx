@@ -76,7 +76,9 @@ const Index = () => {
   }, [transactions, currentDate, banks]);
 
   const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
-  const totalInvested = banks.filter(b => b.type === 'investment').reduce((acc, b) => acc + b.balance, 0);
+  
+  // O total investido no Dashboard agora também soma o saldo aplicado + rendimentos acumulados
+  const totalInvested = banks.filter(b => b.type === 'investment').reduce((acc, b) => acc + b.balance + (b.yieldAmount || 0), 0);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#f8fafc] dark:bg-slate-950">
