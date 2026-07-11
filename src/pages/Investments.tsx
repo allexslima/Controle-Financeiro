@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
@@ -18,7 +18,8 @@ import {
   Pencil,
   Trash2,
   ArrowLeft,
-  Coins
+  Coins,
+  Globe
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,16 +56,53 @@ const InvestmentsPage = () => {
     updatedData?: Transaction
   } | null>(null);
 
+  // Estado para a taxa CDI buscada da internet
+  const [cdiRate, setCdiRate] = useState<number>(11.15); // Fallback padrão caso a API falhe
+  const [isLoadingCDI, setIsLoadingCDI] = useState(true);
+
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("CDB");
   const [newBalance, setNewBalance] = useState("");
   const [newColor, setNewColor] = useState("#0ea5e9");
+  const [newYieldType, setNewYieldType] = useState<'pre' | 'cdi'>("pre");
   const [newYieldRate, setNewYieldRate] = useState("");
   const [newYieldAmount, setNewYieldAmount] = useState("");
+
+  // Buscar taxa CDI atualizada em tempo real
+  useEffect(() => {
+    const fetchCDIRate = async () => {
+      try {
+        setIsLoadingCDI(true);
+        const response = await fetch("https://brasilapi.com.br/api/taxas/v1");
+        if (response.ok) {
+          const data = await response.json();
+          const cdiData = data.find((item: any) => item.nome === "CDI");
+          if (cdiData && cdiData.valor) {
+            setCdiRate(cdiData.valor);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao buscar taxa CDI:", error);
+      } finally {
+        setIsLoadingCDI(false);
+      }
+    };
+
+    fetchCDIRate();
+  }, []);
 
   const investmentBanks = banks.filter(b => b.type === 'investment');
   const totalInvested = investmentBanks.reduce((acc, b) => acc + b.balance, 0);
   const totalYields = investmentBanks.reduce((acc, b) => acc + (b.yieldAmount || 0), 0);
+
+  // Função auxiliar para calcular a taxa de rendimento anual efetiva
+  const getEffectiveYieldRate = (bank: Bank) => {
+    if (!bank.yieldRate) return 0;
+    if (bank.yieldType === 'cdi') {
+      return (bank.yieldRate / 100) * cdiRate;
+    }
+    return bank.yieldRate;
+  };
 
   // Lógica para a visão detalhada
   const getInvestmentSummary = (bank: Bank) => {
@@ -151,6 +189,7 @@ const InvestmentsPage = () => {
       color: newColor,
       type: 'investment',
       investmentType: newType,
+      yieldType: newYieldType,
       yieldRate: newYieldRate ? parseFloat(newYieldRate) : undefined,
       yieldAmount: newYieldAmount ? parseFloat(newYieldAmount) : undefined
     };
@@ -161,6 +200,7 @@ const InvestmentsPage = () => {
     setNewBalance("");
     setNewYieldRate("");
     setNewYieldAmount("");
+    setNewYieldType("pre");
   };
 
   const handleDeleteRequest = (id: string) => {
@@ -209,6 +249,12 @@ const InvestmentsPage = () => {
                 </div>
 
                 <div className="flex items-center gap-3">
+                  {/* Indicador de CDI em tempo real */}
+                  <div className="hidden sm:flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300">
+                    <Globe size={14} className="text-sky-500 animate-pulse" />
+                    <span>CDI Atual: {isLoadingCDI ? "Buscando..." : `${cdiRate.toFixed(2)}% a.a.`}</span>
+                  </div>
+
                   <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
                     <DialogTrigger asChild>
                       <Button className="rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-bold gap-2 h-12 px-6">
@@ -260,13 +306,28 @@ const InvestmentsPage = () => {
                           </div>
                         </div>
 
+                        <div className="space-y-2 border-t pt-4">
+                          <Label>Tipo de Rendimento</Label>
+                          <Select onValueChange={(val) => setNewYieldType(val as 'pre' | 'cdi')} value={newYieldType}>
+                            <SelectTrigger className="rounded-xl">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pre">Pré-fixado (% a.a.)</SelectItem>
+                              <SelectItem value="cdi">Pós-fixado (% CDI)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label>Taxa Rendimento (% a.a.)</Label>
+                            <Label>
+                              {newYieldType === 'pre' ? 'Taxa (% a.a.)' : 'Percentual (% CDI)'}
+                            </Label>
                             <Input 
                               type="number" 
                               step="0.01"
-                              placeholder="Ex: 12.5"
+                              placeholder={newYieldType === 'pre' ? "Ex: 12.5" : "Ex: 100"}
                               value={newYieldRate}
                               onChange={(e) => setNewYieldRate(e.target.value)}
                               className="rounded-xl"
@@ -372,67 +433,72 @@ const InvestmentsPage = () => {
               <div className="space-y-6">
                 <h2 className="text-2xl font-black text-slate-900 dark:text-white px-2">Minhas Aplicações</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {investmentBanks.map(bank => (
-                    <div 
-                      key={bank.id}
-                      onClick={() => setSelectedInvestment(bank)}
-                      className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:shadow-lg transition-all group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 rounded-2xl" style={{ backgroundColor: `${bank.color}15`, color: bank.color }}>
-                          <Landmark size={24} />
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-900 dark:text-white">{bank.name}</p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              {bank.investmentType}
-                            </span>
-                            {bank.yieldRate !== undefined && (
-                              <span className="text-[10px] font-black text-sky-600 bg-sky-50 dark:bg-sky-950/50 px-1.5 py-0.5 rounded">
-                                {bank.yieldRate}% a.a.
+                  {investmentBanks.map(bank => {
+                    const effectiveRate = getEffectiveYieldRate(bank);
+                    return (
+                      <div 
+                        key={bank.id}
+                        onClick={() => setSelectedInvestment(bank)}
+                        className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:shadow-lg transition-all group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 rounded-2xl" style={{ backgroundColor: `${bank.color}15`, color: bank.color }}>
+                            <Landmark size={24} />
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-900 dark:text-white">{bank.name}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                {bank.investmentType}
                               </span>
+                              {bank.yieldRate !== undefined && (
+                                <span className="text-[10px] font-black text-sky-600 bg-sky-50 dark:bg-sky-950/50 px-1.5 py-0.5 rounded">
+                                  {bank.yieldType === 'cdi' 
+                                    ? `${bank.yieldRate}% CDI (~${effectiveRate.toFixed(2)}% a.a.)` 
+                                    : `${bank.yieldRate}% a.a.`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-xl font-black text-slate-900 dark:text-white">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.balance)}
+                            </p>
+                            {bank.yieldAmount !== undefined && bank.yieldAmount > 0 && (
+                              <p className="text-xs text-emerald-600 font-bold">
+                                + {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.yieldAmount)}
+                              </p>
                             )}
+                          </div>
+                          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-slate-400 hover:text-primary"
+                              onClick={(e) => { e.stopPropagation(); setEditingBank(bank); }}
+                            >
+                              <Pencil size={14} />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-slate-400 hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if(confirm("Deseja remover esta conta de investimento?")) {
+                                  removeBank(bank.id);
+                                }
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-xl font-black text-slate-900 dark:text-white">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.balance)}
-                          </p>
-                          {bank.yieldAmount !== undefined && bank.yieldAmount > 0 && (
-                            <p className="text-xs text-emerald-600 font-bold">
-                              + {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bank.yieldAmount)}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-slate-400 hover:text-primary"
-                            onClick={(e) => { e.stopPropagation(); setEditingBank(bank); }}
-                          >
-                            <Pencil size={14} />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-slate-400 hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if(confirm("Deseja remover esta conta de investimento?")) {
-                                removeBank(bank.id);
-                              }
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </>
@@ -464,7 +530,9 @@ const InvestmentsPage = () => {
                   </span>
                   {selectedInvestment.yieldRate !== undefined && (
                     <span className="px-3 py-1 rounded-full bg-sky-50 dark:bg-sky-950/50 text-[10px] font-black text-sky-600">
-                      {selectedInvestment.yieldRate}% a.a.
+                      {selectedInvestment.yieldType === 'cdi' 
+                        ? `${selectedInvestment.yieldRate}% CDI (~${getEffectiveYieldRate(selectedInvestment).toFixed(2)}% a.a.)` 
+                        : `${selectedInvestment.yieldRate}% a.a.`}
                     </span>
                   )}
                 </div>

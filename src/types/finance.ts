@@ -9,7 +9,8 @@ export interface Bank {
   closingDay?: number;
   dueDay?: number;
   investmentType?: string; // Ex: CDB, Ações, FIIs...
-  yieldRate?: number;      // Taxa de rendimento em %
+  yieldType?: 'pre' | 'cdi'; // Tipo de rendimento: Pré-fixado ou CDI
+  yieldRate?: number;      // Taxa de rendimento em % (ex: 12.5 para % a.a. ou 100 para % CDI)
   yieldAmount?: number;    // Valor do rendimento em R$
 }
 

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bank } from "@/types/finance";
 
 interface EditBankDialogProps {
@@ -24,6 +25,7 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
   const [balance, setBalance] = useState("");
   const [color, setColor] = useState("");
   const [closingDay, setClosingDay] = useState("");
+  const [yieldType, setYieldType] = useState<'pre' | 'cdi'>("pre");
   const [yieldRate, setYieldRate] = useState("");
   const [yieldAmount, setYieldAmount] = useState("");
 
@@ -33,6 +35,7 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
       setBalance(bank.balance.toString());
       setColor(bank.color);
       setClosingDay(bank.closingDay?.toString() || "");
+      setYieldType(bank.yieldType || "pre");
       setYieldRate(bank.yieldRate?.toString() || "");
       setYieldAmount(bank.yieldAmount?.toString() || "");
     }
@@ -48,6 +51,7 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
       balance: parseFloat(balance),
       color,
       closingDay: bank.type === 'credit_card' ? parseInt(closingDay) : undefined,
+      yieldType: bank.type === 'investment' ? yieldType : undefined,
       yieldRate: bank.type === 'investment' && yieldRate ? parseFloat(yieldRate) : undefined,
       yieldAmount: bank.type === 'investment' && yieldAmount ? parseFloat(yieldAmount) : undefined,
     };
@@ -109,30 +113,47 @@ const EditBankDialog = ({ bank, onUpdate, onClose }: EditBankDialogProps) => {
           )}
 
           {bank?.type === 'investment' && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4 border-t pt-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-bank-yield-rate">Taxa Rendimento (% a.a.)</Label>
-                <Input
-                  id="edit-bank-yield-rate"
-                  type="number"
-                  step="0.01"
-                  placeholder="Ex: 12.5"
-                  value={yieldRate}
-                  onChange={(e) => setYieldRate(e.target.value)}
-                  className="rounded-xl"
-                />
+                <Label>Tipo de Rendimento</Label>
+                <Select onValueChange={(val) => setYieldType(val as 'pre' | 'cdi')} value={yieldType}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pre">Pré-fixado (% a.a.)</SelectItem>
+                    <SelectItem value="cdi">Pós-fixado (% CDI)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-bank-yield-amount">Rendimento Acumulado (R$)</Label>
-                <Input
-                  id="edit-bank-yield-amount"
-                  type="number"
-                  step="0.01"
-                  placeholder="Ex: 150.00"
-                  value={yieldAmount}
-                  onChange={(e) => setYieldAmount(e.target.value)}
-                  className="rounded-xl"
-                />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-bank-yield-rate">
+                    {yieldType === 'pre' ? 'Taxa (% a.a.)' : 'Percentual (% CDI)'}
+                  </Label>
+                  <Input
+                    id="edit-bank-yield-rate"
+                    type="number"
+                    step="0.01"
+                    placeholder={yieldType === 'pre' ? "Ex: 12.5" : "Ex: 100"}
+                    value={yieldRate}
+                    onChange={(e) => setYieldRate(e.target.value)}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-bank-yield-amount">Rendimento Acumulado (R$)</Label>
+                  <Input
+                    id="edit-bank-yield-amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="Ex: 150.00"
+                    value={yieldAmount}
+                    onChange={(e) => setYieldAmount(e.target.value)}
+                    className="rounded-xl"
+                  />
+                </div>
               </div>
             </div>
           )}
