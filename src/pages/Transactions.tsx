@@ -68,12 +68,23 @@ const TransactionsPage = () => {
   const creditCardBanks = useMemo(() => banks.filter(b => b.type === 'credit_card'), [banks]);
   const investmentBanks = useMemo(() => banks.filter(b => b.type === 'investment'), [banks]);
 
+  const monthStart = useMemo(() => startOfMonth(currentDate), [currentDate]);
+
   // Agrupamento por Banco de Conta Corrente
   const accountGroups = useMemo(() => {
     return accountBanks.map(bank => {
       const bankTransactions = transactions.filter(t => 
         (t.bankId === bank.id || t.destinationBankId === bank.id) &&
         isSameMonth(parseISO(t.date), currentDate)
+      );
+
+      const previousTransactions = transactions.filter(t => 
+        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+        isBefore(parseISO(t.date), monthStart)
+      );
+
+      const previousBalance = previousTransactions.reduce(
+        (acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0
       );
 
       const completed = bankTransactions
@@ -84,11 +95,11 @@ const TransactionsPage = () => {
         .filter(t => !t.isCompleted)
         .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
 
-      const total = completed + future;
+      const total = previousBalance + completed + future;
 
-      return { bank, transactions: bankTransactions, completed, future, total };
+      return { bank, transactions: bankTransactions, previousBalance, completed, future, total };
     });
-  }, [accountBanks, transactions, currentDate]);
+  }, [accountBanks, transactions, currentDate, monthStart]);
 
   // Agrupamento por Cartão de Crédito
   const cardGroups = useMemo(() => {
@@ -99,6 +110,15 @@ const TransactionsPage = () => {
         return isSameMonth(billingMonth, currentDate);
       });
 
+      const previousTransactions = transactions.filter(t => {
+        if (t.bankId !== card.id && t.destinationBankId !== card.id) return false;
+        return isBefore(getBillingMonth(t), monthStart);
+      });
+
+      const previousBalance = previousTransactions.reduce(
+        (acc, t) => acc + getTransactionNetValueForBank(t, card.id), 0
+      );
+
       const completed = cardTransactions
         .filter(t => t.isCompleted)
         .reduce((acc, t) => acc + getTransactionNetValueForBank(t, card.id), 0);
@@ -107,11 +127,11 @@ const TransactionsPage = () => {
         .filter(t => !t.isCompleted)
         .reduce((acc, t) => acc + getTransactionNetValueForBank(t, card.id), 0);
 
-      const total = completed + future;
+      const total = previousBalance + completed + future;
 
-      return { card, transactions: cardTransactions, completed, future, total };
+      return { card, transactions: cardTransactions, previousBalance, completed, future, total };
     });
-  }, [creditCardBanks, transactions, currentDate, banks]);
+  }, [creditCardBanks, transactions, currentDate, monthStart, banks]);
 
   // Agrupamento individual por Conta de Investimento
   const investmentGroups = useMemo(() => {
@@ -119,6 +139,15 @@ const TransactionsPage = () => {
       const bankTransactions = transactions.filter(t => 
         (t.bankId === bank.id || t.destinationBankId === bank.id) &&
         isSameMonth(parseISO(t.date), currentDate)
+      );
+
+      const previousTransactions = transactions.filter(t => 
+        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+        isBefore(parseISO(t.date), monthStart)
+      );
+
+      const previousBalance = previousTransactions.reduce(
+        (acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0
       );
 
       const completed = bankTransactions
@@ -129,15 +158,15 @@ const TransactionsPage = () => {
         .filter(t => !t.isCompleted)
         .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
 
-      const total = completed + future;
+      // Soma saldo acumulado + rendimento cadastrado
+      const total = previousBalance + completed + future + (bank.yieldAmount || 0);
 
-      return { bank, transactions: bankTransactions, completed, future, total };
+      return { bank, transactions: bankTransactions, previousBalance, completed, future, total };
     });
-  }, [investmentBanks, transactions, currentDate]);
+  }, [investmentBanks, transactions, currentDate, monthStart]);
 
   // Resumo Global Final
   const summaryData = useMemo(() => {
-    const monthStart = startOfMonth(currentDate);
     const operationalBanks = banks.filter(b => b.type !== 'investment');
 
     const calculateBalance = (tList: Transaction[]) => {
@@ -172,7 +201,7 @@ const TransactionsPage = () => {
     const previousBalance = calculateBalance(previousTransactions);
 
     return { completed, future, previousBalance };
-  }, [transactions, currentDate, banks]);
+  }, [transactions, currentDate, monthStart, banks]);
 
   const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
 
@@ -226,7 +255,7 @@ const TransactionsPage = () => {
                 <Landmark size={16} /> Contas Bancárias
               </h2>
 
-              {accountGroups.map(({ bank, transactions: bankTs, completed, future, total }) => {
+              {accountGroups.map(({ bank, transactions: bankTs, previousBalance, completed, future, total }) => {
                 const isCollapsed = expandedGroups[bank.id];
                 return (
                   <div key={bank.id} className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
@@ -249,7 +278,7 @@ const TransactionsPage = () => {
                           <p className={cn("text-xl font-black", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                           </p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total no Mês</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Saldo Geral Projetado</p>
                         </div>
                         {isCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
                       </div>
@@ -265,17 +294,29 @@ const TransactionsPage = () => {
                         />
 
                         {/* Totais Específicos do Banco */}
-                        <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4 text-xs font-bold px-6">
+                        <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold px-6">
+                          <div>
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">Mês Anterior: </span>
+                            <span className={previousBalance >= 0 ? "text-slate-700 dark:text-slate-300" : "text-rose-600"}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previousBalance)}
+                            </span>
+                          </div>
                           <div>
                             <span className="text-slate-400 uppercase tracking-wider text-[10px]">Efetuados: </span>
                             <span className={completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completed)}
                             </span>
                           </div>
-                          <div className="text-right">
-                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">Não Efetuados: </span>
+                          <div>
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">Futuros: </span>
                             <span className={future >= 0 ? "text-emerald-600" : "text-rose-600"}>
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(future)}
+                            </span>
+                          </div>
+                          <div className="md:text-right">
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">Total: </span>
+                            <span className={total >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                             </span>
                           </div>
                         </div>
@@ -293,7 +334,7 @@ const TransactionsPage = () => {
                   <CreditCard size={16} /> Cartões de Crédito
                 </h2>
 
-                {cardGroups.map(({ card, transactions: cardTs, completed, future, total }) => {
+                {cardGroups.map(({ card, transactions: cardTs, previousBalance, completed, future, total }) => {
                   const isCollapsed = expandedGroups[card.id];
                   return (
                     <div key={card.id} className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
@@ -318,7 +359,7 @@ const TransactionsPage = () => {
                             <p className={cn("text-xl font-black", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                             </p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Fatura</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Acumulado</p>
                           </div>
                           {isCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
                         </div>
@@ -334,17 +375,29 @@ const TransactionsPage = () => {
                           />
 
                           {/* Totais do Cartão */}
-                          <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4 text-xs font-bold px-6">
+                          <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold px-6">
+                            <div>
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Mês Anterior: </span>
+                              <span className={previousBalance >= 0 ? "text-slate-700 dark:text-slate-300" : "text-rose-600"}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previousBalance)}
+                              </span>
+                            </div>
                             <div>
                               <span className="text-slate-400 uppercase tracking-wider text-[10px]">Efetuados: </span>
                               <span className={completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completed)}
                               </span>
                             </div>
-                            <div className="text-right">
+                            <div>
                               <span className="text-slate-400 uppercase tracking-wider text-[10px]">Futuros: </span>
                               <span className={future >= 0 ? "text-emerald-600" : "text-rose-600"}>
                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(future)}
+                              </span>
+                            </div>
+                            <div className="md:text-right">
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Total: </span>
+                              <span className={total >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                               </span>
                             </div>
                           </div>
@@ -363,7 +416,7 @@ const TransactionsPage = () => {
                   <TrendingUp size={16} /> Investimentos
                 </h2>
 
-                {investmentGroups.map(({ bank, transactions: bankTs, completed, future, total }) => {
+                {investmentGroups.map(({ bank, transactions: bankTs, previousBalance, completed, future, total }) => {
                   const isCollapsed = expandedGroups[bank.id];
                   return (
                     <div key={bank.id} className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
@@ -393,7 +446,7 @@ const TransactionsPage = () => {
                             <p className={cn("text-xl font-black", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                             </p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aporte Líquido Mês</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Saldo Geral Projetado</p>
                           </div>
                           {isCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
                         </div>
@@ -409,17 +462,29 @@ const TransactionsPage = () => {
                           />
 
                           {/* Totais Específicos do Investimento */}
-                          <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4 text-xs font-bold px-6">
+                          <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold px-6">
                             <div>
-                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Aportes Efetuados: </span>
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Mês Anterior: </span>
+                              <span className={previousBalance >= 0 ? "text-slate-700 dark:text-slate-300" : "text-rose-600"}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previousBalance)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Efetuados: </span>
                               <span className={completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completed)}
                               </span>
                             </div>
-                            <div className="text-right">
-                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Aportes Futuros: </span>
+                            <div>
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Futuros: </span>
                               <span className={future >= 0 ? "text-emerald-600" : "text-rose-600"}>
                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(future)}
+                              </span>
+                            </div>
+                            <div className="md:text-right">
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Total: </span>
+                              <span className={total >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                               </span>
                             </div>
                           </div>
