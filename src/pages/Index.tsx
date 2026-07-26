@@ -1,83 +1,30 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import AddBankDialog from "@/components/AddBankDialog";
-import AddCreditCardDialog from "@/components/AddCreditCardDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { TrendingUp, TrendingDown, CreditCard, Wallet, Landmark, ArrowRight, BarChart3 } from "lucide-react";
+import { TrendingUp, Wallet, BarChart3 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } from "date-fns";
 import { useFinance } from "@/context/FinanceContext";
-import { Transaction, Bank } from "@/types/finance";
 import { useNavigate } from "react-router-dom";
-import { cn } from "@/lib/utils";
+import { calculateMonthlySummary } from "@/utils/financeCalculations";
 
 const Index = () => {
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const { banks, transactions, addBank, addTransaction } = useFinance();
-
-  const getBillingMonth = (transaction: Transaction) => {
-    const tDate = parseISO(transaction.date);
-    if (transaction.method !== 'credit') return tDate;
-    
-    const bank = banks.find(b => b.id === transaction.bankId);
-    if (!bank || !bank.closingDay) return tDate;
-
-    if (getDate(tDate) > bank.closingDay) {
-      return addMonths(tDate, 1);
-    }
-    return tDate;
-  };
-
-  const operationalBanks = banks.filter(b => b.type !== 'investment');
+  const { banks, transactions, addTransaction } = useFinance();
 
   const summaryData = useMemo(() => {
-    const monthStart = startOfMonth(currentDate);
-    
-    const calculateBalance = (tList: Transaction[]) => {
-      return tList.reduce((acc, t) => {
-        const isOriginOp = operationalBanks.some(b => b.id === t.bankId);
-        const isDestOp = operationalBanks.some(b => b.id === t.destinationBankId);
-
-        if (t.method === 'income') return isOriginOp ? acc + t.amount : acc;
-        
-        if (t.method === 'transfer' || t.method === 'investment_apply' || t.method === 'investment_redeem') {
-          let balance = acc;
-          if (isOriginOp && !isDestOp) balance -= t.amount;
-          if (!isOriginOp && isDestOp) balance += t.amount;
-          return balance;
-        }
-
-        // Débitos e Créditos (saídas das contas operacionais)
-        return isOriginOp ? acc - t.amount : acc;
-      }, 0);
-    };
-
-    const baseTransactions = transactions.filter(t => {
-      const billingMonth = getBillingMonth(t);
-      return isSameMonth(billingMonth, currentDate);
-    });
-
-    const previousTransactions = transactions.filter(t => 
-      isBefore(getBillingMonth(t), monthStart)
-    );
-
-    const completed = calculateBalance(baseTransactions.filter(t => t.isCompleted));
-    const future = calculateBalance(baseTransactions.filter(t => !t.isCompleted));
-    const previousBalance = calculateBalance(previousTransactions);
-
-    return { completed, future, previousBalance };
+    return calculateMonthlySummary(transactions, banks, currentDate);
   }, [transactions, currentDate, banks]);
 
-  const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
+  const grandTotal = summaryData.grandTotal;
   
-  // O total investido no Dashboard agora também soma o saldo aplicado + rendimentos acumulados
+  // O total investido no Dashboard soma o saldo aplicado + rendimentos acumulados
   const totalInvested = banks.filter(b => b.type === 'investment').reduce((acc, b) => acc + b.balance + (b.yieldAmount || 0), 0);
 
   return (

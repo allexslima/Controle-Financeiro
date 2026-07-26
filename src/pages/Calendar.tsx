@@ -8,21 +8,16 @@ import {
   format, 
   startOfYear, 
   addMonths, 
-  isSameMonth, 
-  isBefore, 
-  startOfMonth, 
-  getDate, 
-  addMonths as addMonthsDate,
   setYear,
   getYear
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Transaction } from "@/types/finance";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import useEmblaCarousel from 'embla-carousel-react';
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { calculateMonthlySummary } from "@/utils/financeCalculations";
 
 const CalendarPage = () => {
   const navigate = useNavigate();
@@ -33,60 +28,21 @@ const CalendarPage = () => {
   const scrollPrev = React.useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
   const scrollNext = React.useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
 
-  const getBillingMonth = (transaction: Transaction) => {
-    const tDate = new Date(transaction.date);
-    if (transaction.method !== 'credit') return tDate;
-    
-    const bank = banks.find(b => b.id === transaction.bankId);
-    if (!bank || !bank.closingDay) return tDate;
-
-    if (getDate(tDate) > bank.closingDay) {
-      return addMonthsDate(tDate, 1);
-    }
-    return tDate;
-  };
-
   const yearData = useMemo(() => {
     const months = [];
     const yearStart = startOfYear(setYear(new Date(), selectedYear));
 
     for (let i = 0; i < 12; i++) {
       const currentMonth = addMonths(yearStart, i);
-      const monthStart = startOfMonth(currentMonth);
-      
-      const base = transactions.filter(t => isSameMonth(getBillingMonth(t), currentMonth));
-
-      const completed = base.filter(t => t.isCompleted)
-        .reduce((acc, t) => {
-          if (t.method === 'income') return acc + t.amount;
-          if (t.method === 'transfer') return acc;
-          return acc - t.amount;
-        }, 0);
-      
-      const future = base.filter(t => !t.isCompleted)
-        .reduce((acc, t) => {
-          if (t.method === 'income') return acc + t.amount;
-          if (t.method === 'transfer') return acc;
-          return acc - t.amount;
-        }, 0);
-
-      const previousBalance = transactions
-        .filter(t => isBefore(getBillingMonth(t), monthStart))
-        .reduce((acc, t) => {
-          if (t.method === 'income') return acc + t.amount;
-          if (t.method === 'transfer') return acc;
-          return acc - t.amount;
-        }, 0);
-
-      const grandTotal = completed + future + previousBalance;
+      const summary = calculateMonthlySummary(transactions, banks, currentMonth);
 
       months.push({
         date: currentMonth,
         name: format(currentMonth, "MMMM", { locale: ptBR }),
-        completed,
-        future,
-        previousBalance,
-        grandTotal
+        completed: summary.completed,
+        future: summary.future,
+        previousBalance: summary.previousBalance,
+        grandTotal: summary.grandTotal
       });
     }
     return months;

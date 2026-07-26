@@ -9,11 +9,12 @@ import EditTransactionDialog from "@/components/EditTransactionDialog";
 import AddTransactionDialog from "@/components/AddTransactionDialog";
 import RecurringActionDialog from "@/components/RecurringActionDialog";
 import { useFinance } from "@/context/FinanceContext";
-import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } from "date-fns";
-import { Transaction, Bank } from "@/types/finance";
+import { isSameMonth, parseISO, isBefore, startOfMonth } from "date-fns";
+import { Transaction } from "@/types/finance";
 import { useLocation } from "react-router-dom";
 import { Landmark, CreditCard, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { calculateMonthlySummary, getBillingMonth } from "@/utils/financeCalculations";
 
 const TransactionsPage = () => {
   const location = useLocation();
@@ -36,15 +37,6 @@ const TransactionsPage = () => {
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
-  };
-
-  const getBillingMonth = (transaction: Transaction) => {
-    const tDate = parseISO(transaction.date);
-    if (transaction.method !== 'credit') return tDate;
-    const bank = banks.find(b => b.id === transaction.bankId);
-    if (!bank || !bank.closingDay) return tDate;
-    if (getDate(tDate) > bank.closingDay) return addMonths(tDate, 1);
-    return tDate;
   };
 
   // Função para calcular o valor líquido de uma transação para um determinado banco/investimento
@@ -106,13 +98,13 @@ const TransactionsPage = () => {
     return creditCardBanks.map(card => {
       const cardTransactions = transactions.filter(t => {
         if (t.bankId !== card.id && t.destinationBankId !== card.id) return false;
-        const billingMonth = getBillingMonth(t);
+        const billingMonth = getBillingMonth(t, banks);
         return isSameMonth(billingMonth, currentDate);
       });
 
       const previousTransactions = transactions.filter(t => {
         if (t.bankId !== card.id && t.destinationBankId !== card.id) return false;
-        return isBefore(getBillingMonth(t), monthStart);
+        return isBefore(getBillingMonth(t, banks), monthStart);
       });
 
       const previousBalance = previousTransactions.reduce(
@@ -158,52 +150,16 @@ const TransactionsPage = () => {
         .filter(t => !t.isCompleted)
         .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
 
-      // Soma saldo acumulado + rendimento cadastrado
       const total = previousBalance + completed + future + (bank.yieldAmount || 0);
 
       return { bank, transactions: bankTransactions, previousBalance, completed, future, total };
     });
   }, [investmentBanks, transactions, currentDate, monthStart]);
 
-  // Resumo Global Final
+  // Resumo Global Final (calculado via utilitário centralizado)
   const summaryData = useMemo(() => {
-    const operationalBanks = banks.filter(b => b.type !== 'investment');
-
-    const calculateBalance = (tList: Transaction[]) => {
-      return tList.reduce((acc, t) => {
-        const isOriginOp = operationalBanks.some(b => b.id === t.bankId);
-        const isDestOp = operationalBanks.some(b => b.id === t.destinationBankId);
-
-        if (t.method === 'income') return isOriginOp ? acc + t.amount : acc;
-        
-        if (t.method === 'transfer' || t.method === 'investment_apply' || t.method === 'investment_redeem') {
-          let balance = acc;
-          if (isOriginOp && !isDestOp) balance -= t.amount;
-          if (!isOriginOp && isDestOp) balance += t.amount;
-          return balance;
-        }
-
-        return isOriginOp ? acc - t.amount : acc;
-      }, 0);
-    };
-
-    const baseTransactions = transactions.filter(t => {
-      const billingMonth = getBillingMonth(t);
-      return isSameMonth(billingMonth, currentDate);
-    });
-
-    const previousTransactions = transactions.filter(t => 
-      isBefore(getBillingMonth(t), monthStart)
-    );
-
-    const completed = calculateBalance(baseTransactions.filter(t => t.isCompleted));
-    const future = calculateBalance(baseTransactions.filter(t => !t.isCompleted));
-    const previousBalance = calculateBalance(previousTransactions);
-
-    return { completed, future, previousBalance };
-  }, [transactions, currentDate, monthStart, banks]);
-
-  const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
+    return calculateMonthlySummary(transactions, banks, currentDate);
+  }, [transactions, banks, currentDate]);
 
   const handleUpdate = (updated: Transaction) => {
     if (updated.groupId) {
@@ -520,8 +476,8 @@ const TransactionsPage = () => {
             </div>
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <span className="text-lg font-black text-slate-900 dark:text-white">Total Geral</span>
-              <span className={`text-2xl font-black ${grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grandTotal)}
+              <span className={`text-2xl font-black ${summaryData.grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(summaryData.grandTotal)}
               </span>
             </div>
           </div>
