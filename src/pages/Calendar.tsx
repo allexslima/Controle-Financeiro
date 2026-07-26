@@ -61,7 +61,7 @@ const CalendarPage = () => {
           <header className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-1 text-center md:text-left">
               <h1 className="text-3xl font-black text-slate-900 dark:text-white">Calendário Anual</h1>
-              <p className="text-slate-500 text-sm font-medium">Visão panorâmica das suas finanças</p>
+              <p className="text-slate-500 text-sm font-medium">Resumo Geral do Mês para cada período</p>
             </div>
 
             <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
@@ -94,54 +94,51 @@ const CalendarPage = () => {
                 {yearData.map((month, index) => (
                   <div 
                     key={index} 
-                    className="flex-[0_0_85%] sm:flex-[0_0_45%] lg:flex-[0_0_30%] min-w-0"
+                    className="flex-[0_0_85%] sm:flex-[0_0_50%] lg:flex-[0_0_33.33%] min-w-0"
                   >
                     <div 
                       onClick={() => handleMonthClick(month.date)}
-                      className={cn(
-                        "p-8 rounded-[2.5rem] border-2 transition-all h-full flex flex-col justify-between cursor-pointer hover:scale-[1.02] active:scale-95",
-                        month.grandTotal >= 0 
-                          ? "bg-emerald-50/50 border-emerald-100 dark:bg-emerald-950/10 dark:border-emerald-900/30 hover:border-emerald-300" 
-                          : "bg-rose-50/50 border-rose-100 dark:bg-rose-950/10 dark:border-rose-900/30 hover:border-rose-300"
-                      )}
+                      className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4 cursor-pointer hover:shadow-xl hover:border-primary/20 transition-all h-full flex flex-col justify-between"
                     >
                       <div>
-                        <h3 className="text-2xl font-black capitalize mb-8 text-slate-900 dark:text-white">
-                          {month.name}
-                        </h3>
+                        <div className="flex justify-between items-center mb-6">
+                          <h3 className="text-2xl font-black capitalize text-slate-900 dark:text-white">
+                            {month.name}
+                          </h3>
+                          <span className="text-[10px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 px-2.5 py-1 rounded-full">
+                            {selectedYear}
+                          </span>
+                        </div>
                         
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Efetuados</span>
-                            <span className={cn("font-bold", month.completed >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between font-medium text-slate-500">
+                            <span>Valores Efetuados (Mês)</span>
+                            <span className={month.completed >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(month.completed)}
                             </span>
                           </div>
-                          
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Futuros</span>
-                            <span className={cn("font-bold", month.future >= 0 ? "text-emerald-600" : "text-rose-600")}>
+
+                          <div className="flex justify-between font-medium text-slate-500">
+                            <span>Valores Futuros (Mês)</span>
+                            <span className={month.future >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(month.future)}
                             </span>
                           </div>
 
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Mês Anterior</span>
-                            <span className={cn("font-bold", month.previousBalance >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                          <div className="flex justify-between font-medium text-slate-500">
+                            <span>Saldo Mês Anterior</span>
+                            <span className={month.previousBalance >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(month.previousBalance)}
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="mt-10 pt-6 border-t border-slate-200/50 dark:border-slate-700/50">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Total Geral</p>
-                        <p className={cn(
-                          "text-3xl font-black",
-                          month.grandTotal >= 0 ? "text-emerald-600" : "text-rose-600"
-                        )}>
+                      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center mt-6">
+                        <span className="text-base font-black text-slate-900 dark:text-white">Total Geral</span>
+                        <span className={`text-xl font-black ${month.grandTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(month.grandTotal)}
-                        </p>
+                        </span>
                       </div>
                     </div>
                   </div>
