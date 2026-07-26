@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
@@ -12,7 +12,7 @@ import { useFinance } from "@/context/FinanceContext";
 import { isSameMonth, parseISO, isBefore, startOfMonth, getDate, addMonths } from "date-fns";
 import { Transaction, Bank } from "@/types/finance";
 import { useLocation } from "react-router-dom";
-import { ChevronDown, ChevronUp, CreditCard } from "lucide-react";
+import { Landmark, CreditCard, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TransactionsPage = () => {
@@ -25,7 +25,7 @@ const TransactionsPage = () => {
   });
 
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [expandedFaturas, setExpandedFaturas] = useState<Record<string, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   
   const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
@@ -33,6 +33,10 @@ const TransactionsPage = () => {
     transaction: Transaction,
     updatedData?: Transaction
   } | null>(null);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
 
   const getBillingMonth = (transaction: Transaction) => {
     const tDate = parseISO(transaction.date);
@@ -43,56 +47,145 @@ const TransactionsPage = () => {
     return tDate;
   };
 
-  const processedData = useMemo(() => {
-    const monthTransactions = transactions.filter(t => isSameMonth(getBillingMonth(t), currentDate));
+  // Função para calcular o valor líquido de uma transação para um determinado banco
+  const getTransactionNetValueForBank = (t: Transaction, bankId: string) => {
+    const isOrigin = t.bankId === bankId;
+    const isDest = t.destinationBankId === bankId;
+
+    if (t.method === 'income') return isOrigin ? t.amount : 0;
+    if (t.method === 'debit' || t.method === 'credit') return isOrigin ? -t.amount : 0;
     
-    const normalTransactions: Transaction[] = [];
-    const creditGroups: Record<string, { transactions: Transaction[], payments: number }> = {};
+    if (t.method === 'transfer' || t.method === 'investment_apply' || t.method === 'investment_redeem') {
+      if (isOrigin && !isDest) return -t.amount;
+      if (!isOrigin && isDest) return t.amount;
+    }
 
-    monthTransactions.forEach(t => {
-      if (t.method === 'credit') {
-        if (!creditGroups[t.bankId]) creditGroups[t.bankId] = { transactions: [], payments: 0 };
-        creditGroups[t.bankId].transactions.push(t);
-      } else if (t.method === 'transfer' && banks.find(b => b.id === t.destinationBankId)?.type === 'credit_card') {
-        if (!creditGroups[t.destinationBankId!]) creditGroups[t.destinationBankId!] = { transactions: [], payments: 0 };
-        creditGroups[t.destinationBankId!].payments += t.amount;
-        normalTransactions.push(t);
-      } else {
-        normalTransactions.push(t);
-      }
+    return 0;
+  };
+
+  // Separação dos bancos por tipo
+  const accountBanks = useMemo(() => banks.filter(b => b.type === 'account'), [banks]);
+  const creditCardBanks = useMemo(() => banks.filter(b => b.type === 'credit_card'), [banks]);
+  const investmentBanks = useMemo(() => banks.filter(b => b.type === 'investment'), [banks]);
+
+  // Agrupamento por Banco de Conta Corrente
+  const accountGroups = useMemo(() => {
+    return accountBanks.map(bank => {
+      const bankTransactions = transactions.filter(t => 
+        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+        isSameMonth(parseISO(t.date), currentDate)
+      );
+
+      const completed = bankTransactions
+        .filter(t => t.isCompleted)
+        .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
+
+      const future = bankTransactions
+        .filter(t => !t.isCompleted)
+        .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
+
+      const total = completed + future;
+
+      return { bank, transactions: bankTransactions, completed, future, total };
     });
+  }, [accountBanks, transactions, currentDate]);
 
-    return { normalTransactions, creditGroups };
-  }, [transactions, currentDate, banks]);
+  // Agrupamento por Cartão de Crédito
+  const cardGroups = useMemo(() => {
+    return creditCardBanks.map(card => {
+      const cardTransactions = transactions.filter(t => {
+        if (t.bankId !== card.id && t.destinationBankId !== card.id) return false;
+        const billingMonth = getBillingMonth(t);
+        return isSameMonth(billingMonth, currentDate);
+      });
 
+      const completed = cardTransactions
+        .filter(t => t.isCompleted)
+        .reduce((acc, t) => acc + getTransactionNetValueForBank(t, card.id), 0);
+
+      const future = cardTransactions
+        .filter(t => !t.isCompleted)
+        .reduce((acc, t) => acc + getTransactionNetValueForBank(t, card.id), 0);
+
+      const total = completed + future;
+
+      return { card, transactions: cardTransactions, completed, future, total };
+    });
+  }, [creditCardBanks, transactions, currentDate, banks]);
+
+  // Agrupamento dos Investimentos
+  const investmentsGroup = useMemo(() => {
+    const invBankIds = investmentBanks.map(b => b.id);
+    const invTransactions = transactions.filter(t => 
+      (invBankIds.includes(t.bankId) || (t.destinationBankId && invBankIds.includes(t.destinationBankId))) &&
+      isSameMonth(parseISO(t.date), currentDate)
+    );
+
+    const completed = invTransactions
+      .filter(t => t.isCompleted)
+      .reduce((acc, t) => {
+        const isInvDest = invBankIds.includes(t.destinationBankId || '');
+        const isInvOrig = invBankIds.includes(t.bankId);
+        if (t.method === 'investment_apply' && isInvDest) return acc + t.amount;
+        if (t.method === 'investment_redeem' && isInvOrig) return acc - t.amount;
+        return acc;
+      }, 0);
+
+    const future = invTransactions
+      .filter(t => !t.isCompleted)
+      .reduce((acc, t) => {
+        const isInvDest = invBankIds.includes(t.destinationBankId || '');
+        const isInvOrig = invBankIds.includes(t.bankId);
+        if (t.method === 'investment_apply' && isInvDest) return acc + t.amount;
+        if (t.method === 'investment_redeem' && isInvOrig) return acc - t.amount;
+        return acc;
+      }, 0);
+
+    const total = completed + future;
+
+    return { transactions: invTransactions, completed, future, total };
+  }, [investmentBanks, transactions, currentDate]);
+
+  // Resumo Global Final
   const summaryData = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
-    const baseTransactions = transactions.filter(t => isSameMonth(getBillingMonth(t), currentDate));
+    const operationalBanks = banks.filter(b => b.type !== 'investment');
 
     const calculateBalance = (tList: Transaction[]) => {
       return tList.reduce((acc, t) => {
-        if (t.method === 'income') return acc + t.amount;
-        if (t.method === 'transfer') return acc;
-        return acc - t.amount;
+        const isOriginOp = operationalBanks.some(b => b.id === t.bankId);
+        const isDestOp = operationalBanks.some(b => b.id === t.destinationBankId);
+
+        if (t.method === 'income') return isOriginOp ? acc + t.amount : acc;
+        
+        if (t.method === 'transfer' || t.method === 'investment_apply' || t.method === 'investment_redeem') {
+          let balance = acc;
+          if (isOriginOp && !isDestOp) balance -= t.amount;
+          if (!isOriginOp && isDestOp) balance += t.amount;
+          return balance;
+        }
+
+        return isOriginOp ? acc - t.amount : acc;
       }, 0);
     };
 
-    const completed = calculateBalance(baseTransactions.filter(t => t.isCompleted));
-    const future = calculateBalance(baseTransactions.filter(t => !t.isCompleted));
-    
+    const baseTransactions = transactions.filter(t => {
+      const billingMonth = getBillingMonth(t);
+      return isSameMonth(billingMonth, currentDate);
+    });
+
     const previousTransactions = transactions.filter(t => 
       isBefore(getBillingMonth(t), monthStart)
     );
+
+    const completed = calculateBalance(baseTransactions.filter(t => t.isCompleted));
+    const future = calculateBalance(baseTransactions.filter(t => !t.isCompleted));
     const previousBalance = calculateBalance(previousTransactions);
 
     return { completed, future, previousBalance };
   }, [transactions, currentDate, banks]);
 
   const grandTotal = summaryData.completed + summaryData.future + summaryData.previousBalance;
-
-  const toggleFatura = (bankId: string) => {
-    setExpandedFaturas(prev => ({ ...prev, [bankId]: !prev[bankId] }));
-  };
 
   const handleUpdate = (updated: Transaction) => {
     if (updated.groupId) {
@@ -137,70 +230,211 @@ const TransactionsPage = () => {
             <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
           </header>
 
-          <div className="space-y-4">
-            {Object.entries(processedData.creditGroups).map(([bankId, group]) => {
-              const bank = banks.find(b => b.id === bankId);
-              const totalPurchases = group.transactions.reduce((acc, t) => acc + t.amount, 0);
-              const remainingBalance = Math.max(0, totalPurchases - group.payments);
-              const isExpanded = expandedFaturas[bankId];
+          <div className="space-y-8">
+            {/* 1. SEÇÃO DE CONTAS BANCÁRIAS */}
+            <div className="space-y-4">
+              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 px-2 flex items-center gap-2">
+                <Landmark size={16} /> Contas Bancárias
+              </h2>
 
-              if (totalPurchases === 0) return null;
-
-              return (
-                <div key={bankId} className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-                  <div 
-                    className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                    onClick={() => toggleFatura(bankId)}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-2xl bg-purple-100 text-purple-600">
-                        <CreditCard size={24} />
+              {accountGroups.map(({ bank, transactions: bankTs, completed, future, total }) => {
+                const isCollapsed = expandedGroups[bank.id];
+                return (
+                  <div key={bank.id} className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div 
+                      className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                      onClick={() => toggleGroup(bank.id)}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-3 h-10 rounded-full" style={{ backgroundColor: bank.color }} />
+                        <div>
+                          <h3 className="font-black text-slate-900 dark:text-white text-lg">{bank.name}</h3>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            {bankTs.length} {bankTs.length === 1 ? 'movimentação' : 'movimentações'}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-black text-slate-900 dark:text-white">Fatura {bank?.name}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          {group.payments > 0 ? `Pago: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(group.payments)}` : 'Aguardando pagamento'}
-                        </p>
+
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <p className={cn("text-xl font-black", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total no Mês</p>
+                        </div>
+                        {isCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
                       </div>
                     </div>
+
+                    {!isCollapsed && (
+                      <div className="border-t border-slate-100 dark:border-slate-800">
+                        <TransactionList 
+                          transactions={bankTs} 
+                          banks={banks} 
+                          onEdit={setEditingTransaction} 
+                          onDelete={handleDeleteRequest}
+                        />
+
+                        {/* Totais Específicos do Banco */}
+                        <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4 text-xs font-bold px-6">
+                          <div>
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">Efetuados: </span>
+                            <span className={completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completed)}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">Não Efetuados: </span>
+                            <span className={future >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(future)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 2. SEÇÃO DE CARTÕES DE CRÉDITO */}
+            {cardGroups.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 px-2 flex items-center gap-2">
+                  <CreditCard size={16} /> Cartões de Crédito
+                </h2>
+
+                {cardGroups.map(({ card, transactions: cardTs, completed, future, total }) => {
+                  const isCollapsed = expandedGroups[card.id];
+                  return (
+                    <div key={card.id} className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                      <div 
+                        className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                        onClick={() => toggleGroup(card.id)}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 rounded-2xl bg-purple-100 text-purple-600">
+                            <CreditCard size={20} />
+                          </div>
+                          <div>
+                            <h3 className="font-black text-slate-900 dark:text-white text-lg">Fatura {card.name}</h3>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              {cardTs.length} {cardTs.length === 1 ? 'lançamento' : 'lançamentos'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-6">
+                          <div className="text-right">
+                            <p className={cn("text-xl font-black", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Fatura</p>
+                          </div>
+                          {isCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+                        </div>
+                      </div>
+
+                      {!isCollapsed && (
+                        <div className="border-t border-slate-100 dark:border-slate-800">
+                          <TransactionList 
+                            transactions={cardTs} 
+                            banks={banks} 
+                            onEdit={setEditingTransaction} 
+                            onDelete={handleDeleteRequest}
+                          />
+
+                          {/* Totais do Cartão */}
+                          <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4 text-xs font-bold px-6">
+                            <div>
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Efetuados: </span>
+                              <span className={completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completed)}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Futuros: </span>
+                              <span className={future >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(future)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 3. SEÇÃO DE INVESTIMENTOS */}
+            {investmentBanks.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 px-2 flex items-center gap-2">
+                  <TrendingUp size={16} /> Grupo de Investimentos
+                </h2>
+
+                <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                  <div 
+                    className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                    onClick={() => toggleGroup('group-investments')}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-2xl bg-sky-100 text-sky-600">
+                        <TrendingUp size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-slate-900 dark:text-white text-lg">Aplicações e Resgates</h3>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          {investmentsGroup.transactions.length} movimentação(ões) no mês
+                        </span>
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-6">
                       <div className="text-right">
-                        <p className={cn("text-xl font-black", remainingBalance > 0 ? "text-rose-600" : "text-emerald-600")}>
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingBalance)}
+                        <p className={cn("text-xl font-black", investmentsGroup.total >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(investmentsGroup.total)}
                         </p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Restante</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aporte Líquido Mês</p>
                       </div>
-                      {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      {expandedGroups['group-investments'] ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
                     </div>
                   </div>
 
-                  {isExpanded && (
-                    <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                  {!expandedGroups['group-investments'] && (
+                    <div className="border-t border-slate-100 dark:border-slate-800">
                       <TransactionList 
-                        transactions={group.transactions} 
+                        transactions={investmentsGroup.transactions} 
                         banks={banks} 
                         onEdit={setEditingTransaction} 
                         onDelete={handleDeleteRequest}
                       />
+
+                      <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4 text-xs font-bold px-6">
+                        <div>
+                          <span className="text-slate-400 uppercase tracking-wider text-[10px]">Aportes Efetuados: </span>
+                          <span className={investmentsGroup.completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(investmentsGroup.completed)}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-slate-400 uppercase tracking-wider text-[10px]">Aportes Futuros: </span>
+                          <span className={investmentsGroup.future >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(investmentsGroup.future)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-              );
-            })}
-
-            <div className="space-y-2">
-              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 px-4 mb-2">Movimentações de Conta</h3>
-              <TransactionList 
-                transactions={processedData.normalTransactions} 
-                banks={banks} 
-                onEdit={setEditingTransaction} 
-                onDelete={handleDeleteRequest}
-              />
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Card de Resumo Financeiro */}
+          {/* 4. RESUMO GERAL GLOBAL NO RODAPÉ */}
           <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">Resumo Geral do Mês</h3>
             <div className="flex justify-between text-sm font-medium text-slate-500">
               <span>Valores Efetuados (Mês)</span>
               <span className={summaryData.completed >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
