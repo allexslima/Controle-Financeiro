@@ -47,7 +47,7 @@ const TransactionsPage = () => {
     return tDate;
   };
 
-  // Função para calcular o valor líquido de uma transação para um determinado banco
+  // Função para calcular o valor líquido de uma transação para um determinado banco/investimento
   const getTransactionNetValueForBank = (t: Transaction, bankId: string) => {
     const isOrigin = t.bankId === bankId;
     const isDest = t.destinationBankId === bankId;
@@ -113,37 +113,26 @@ const TransactionsPage = () => {
     });
   }, [creditCardBanks, transactions, currentDate, banks]);
 
-  // Agrupamento dos Investimentos
-  const investmentsGroup = useMemo(() => {
-    const invBankIds = investmentBanks.map(b => b.id);
-    const invTransactions = transactions.filter(t => 
-      (invBankIds.includes(t.bankId) || (t.destinationBankId && invBankIds.includes(t.destinationBankId))) &&
-      isSameMonth(parseISO(t.date), currentDate)
-    );
+  // Agrupamento individual por Conta de Investimento
+  const investmentGroups = useMemo(() => {
+    return investmentBanks.map(bank => {
+      const bankTransactions = transactions.filter(t => 
+        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+        isSameMonth(parseISO(t.date), currentDate)
+      );
 
-    const completed = invTransactions
-      .filter(t => t.isCompleted)
-      .reduce((acc, t) => {
-        const isInvDest = invBankIds.includes(t.destinationBankId || '');
-        const isInvOrig = invBankIds.includes(t.bankId);
-        if (t.method === 'investment_apply' && isInvDest) return acc + t.amount;
-        if (t.method === 'investment_redeem' && isInvOrig) return acc - t.amount;
-        return acc;
-      }, 0);
+      const completed = bankTransactions
+        .filter(t => t.isCompleted)
+        .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
 
-    const future = invTransactions
-      .filter(t => !t.isCompleted)
-      .reduce((acc, t) => {
-        const isInvDest = invBankIds.includes(t.destinationBankId || '');
-        const isInvOrig = invBankIds.includes(t.bankId);
-        if (t.method === 'investment_apply' && isInvDest) return acc + t.amount;
-        if (t.method === 'investment_redeem' && isInvOrig) return acc - t.amount;
-        return acc;
-      }, 0);
+      const future = bankTransactions
+        .filter(t => !t.isCompleted)
+        .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
 
-    const total = completed + future;
+      const total = completed + future;
 
-    return { transactions: invTransactions, completed, future, total };
+      return { bank, transactions: bankTransactions, completed, future, total };
+    });
   }, [investmentBanks, transactions, currentDate]);
 
   // Resumo Global Final
@@ -368,66 +357,77 @@ const TransactionsPage = () => {
             )}
 
             {/* 3. SEÇÃO DE INVESTIMENTOS */}
-            {investmentBanks.length > 0 && (
+            {investmentGroups.length > 0 && (
               <div className="space-y-4">
                 <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 px-2 flex items-center gap-2">
-                  <TrendingUp size={16} /> Grupo de Investimentos
+                  <TrendingUp size={16} /> Investimentos
                 </h2>
 
-                <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-                  <div 
-                    className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                    onClick={() => toggleGroup('group-investments')}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-2xl bg-sky-100 text-sky-600">
-                        <TrendingUp size={20} />
-                      </div>
-                      <div>
-                        <h3 className="font-black text-slate-900 dark:text-white text-lg">Aplicações e Resgates</h3>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          {investmentsGroup.transactions.length} movimentação(ões) no mês
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <p className={cn("text-xl font-black", investmentsGroup.total >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(investmentsGroup.total)}
-                        </p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aporte Líquido Mês</p>
-                      </div>
-                      {expandedGroups['group-investments'] ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-                    </div>
-                  </div>
-
-                  {!expandedGroups['group-investments'] && (
-                    <div className="border-t border-slate-100 dark:border-slate-800">
-                      <TransactionList 
-                        transactions={investmentsGroup.transactions} 
-                        banks={banks} 
-                        onEdit={setEditingTransaction} 
-                        onDelete={handleDeleteRequest}
-                      />
-
-                      <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4 text-xs font-bold px-6">
-                        <div>
-                          <span className="text-slate-400 uppercase tracking-wider text-[10px]">Aportes Efetuados: </span>
-                          <span className={investmentsGroup.completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(investmentsGroup.completed)}
-                          </span>
+                {investmentGroups.map(({ bank, transactions: bankTs, completed, future, total }) => {
+                  const isCollapsed = expandedGroups[bank.id];
+                  return (
+                    <div key={bank.id} className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+                      <div 
+                        className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                        onClick={() => toggleGroup(bank.id)}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-3 h-10 rounded-full" style={{ backgroundColor: bank.color }} />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-black text-slate-900 dark:text-white text-lg">{bank.name}</h3>
+                              {bank.investmentType && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 uppercase tracking-wider">
+                                  {bank.investmentType}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              {bankTs.length} {bankTs.length === 1 ? 'movimentação' : 'movimentações'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="text-slate-400 uppercase tracking-wider text-[10px]">Aportes Futuros: </span>
-                          <span className={investmentsGroup.future >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(investmentsGroup.future)}
-                          </span>
+
+                        <div className="flex items-center gap-6">
+                          <div className="text-right">
+                            <p className={cn("text-xl font-black", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aporte Líquido Mês</p>
+                          </div>
+                          {isCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
                         </div>
                       </div>
+
+                      {!isCollapsed && (
+                        <div className="border-t border-slate-100 dark:border-slate-800">
+                          <TransactionList 
+                            transactions={bankTs} 
+                            banks={banks} 
+                            onEdit={setEditingTransaction} 
+                            onDelete={handleDeleteRequest}
+                          />
+
+                          {/* Totais Específicos do Investimento */}
+                          <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4 text-xs font-bold px-6">
+                            <div>
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Aportes Efetuados: </span>
+                              <span className={completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completed)}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Aportes Futuros: </span>
+                              <span className={future >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(future)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
             )}
           </div>
