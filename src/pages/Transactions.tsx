@@ -12,7 +12,7 @@ import { useFinance } from "@/context/FinanceContext";
 import { isSameMonth, parseISO, isBefore, startOfMonth } from "date-fns";
 import { Transaction } from "@/types/finance";
 import { useLocation } from "react-router-dom";
-import { Landmark, CreditCard, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
+import { Landmark, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { calculateMonthlySummary, getBillingMonth } from "@/utils/financeCalculations";
 
@@ -39,7 +39,7 @@ const TransactionsPage = () => {
     setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
-  // Função para calcular o valor líquido de uma transação para um determinado banco/investimento
+  // Função para calcular o valor líquido de uma transação para um determinado banco/cartão
   const getTransactionNetValueForBank = (t: Transaction, bankId: string) => {
     const isOrigin = t.bankId === bankId;
     const isDest = t.destinationBankId === bankId;
@@ -58,7 +58,6 @@ const TransactionsPage = () => {
   // Separação dos bancos por tipo
   const accountBanks = useMemo(() => banks.filter(b => b.type === 'account'), [banks]);
   const creditCardBanks = useMemo(() => banks.filter(b => b.type === 'credit_card'), [banks]);
-  const investmentBanks = useMemo(() => banks.filter(b => b.type === 'investment'), [banks]);
 
   const monthStart = useMemo(() => startOfMonth(currentDate), [currentDate]);
 
@@ -124,37 +123,6 @@ const TransactionsPage = () => {
       return { card, transactions: cardTransactions, previousBalance, completed, future, total };
     });
   }, [creditCardBanks, transactions, currentDate, monthStart, banks]);
-
-  // Agrupamento individual por Conta de Investimento
-  const investmentGroups = useMemo(() => {
-    return investmentBanks.map(bank => {
-      const bankTransactions = transactions.filter(t => 
-        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
-        isSameMonth(parseISO(t.date), currentDate)
-      );
-
-      const previousTransactions = transactions.filter(t => 
-        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
-        isBefore(parseISO(t.date), monthStart)
-      );
-
-      const previousBalance = previousTransactions.reduce(
-        (acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0
-      );
-
-      const completed = bankTransactions
-        .filter(t => t.isCompleted)
-        .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
-
-      const future = bankTransactions
-        .filter(t => !t.isCompleted)
-        .reduce((acc, t) => acc + getTransactionNetValueForBank(t, bank.id), 0);
-
-      const total = previousBalance + completed + future + (bank.yieldAmount || 0);
-
-      return { bank, transactions: bankTransactions, previousBalance, completed, future, total };
-    });
-  }, [investmentBanks, transactions, currentDate, monthStart]);
 
   // Resumo Global Final (calculado via utilitário centralizado)
   const summaryData = useMemo(() => {
@@ -364,96 +332,9 @@ const TransactionsPage = () => {
                 })}
               </div>
             )}
-
-            {/* 3. SEÇÃO DE INVESTIMENTOS */}
-            {investmentGroups.length > 0 && (
-              <div className="space-y-4">
-                <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 px-2 flex items-center gap-2">
-                  <TrendingUp size={16} /> Investimentos
-                </h2>
-
-                {investmentGroups.map(({ bank, transactions: bankTs, previousBalance, completed, future, total }) => {
-                  const isCollapsed = expandedGroups[bank.id];
-                  return (
-                    <div key={bank.id} className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-                      <div 
-                        className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                        onClick={() => toggleGroup(bank.id)}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-3 h-10 rounded-full" style={{ backgroundColor: bank.color }} />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-black text-slate-900 dark:text-white text-lg">{bank.name}</h3>
-                              {bank.investmentType && (
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 uppercase tracking-wider">
-                                  {bank.investmentType}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              {bankTs.length} {bankTs.length === 1 ? 'movimentação' : 'movimentações'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-6">
-                          <div className="text-right">
-                            <p className={cn("text-xl font-black", total >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
-                            </p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Saldo Geral Projetado</p>
-                          </div>
-                          {isCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-                        </div>
-                      </div>
-
-                      {!isCollapsed && (
-                        <div className="border-t border-slate-100 dark:border-slate-800">
-                          <TransactionList 
-                            transactions={bankTs} 
-                            banks={banks} 
-                            onEdit={setEditingTransaction} 
-                            onDelete={handleDeleteRequest}
-                          />
-
-                          {/* Totais Específicos do Investimento */}
-                          <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold px-6">
-                            <div>
-                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Mês Anterior: </span>
-                              <span className={previousBalance >= 0 ? "text-slate-700 dark:text-slate-300" : "text-rose-600"}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previousBalance)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Efetuados: </span>
-                              <span className={completed >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(completed)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Futuros: </span>
-                              <span className={future >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(future)}
-                              </span>
-                            </div>
-                            <div className="md:text-right">
-                              <span className="text-slate-400 uppercase tracking-wider text-[10px]">Total: </span>
-                              <span className={total >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
-          {/* 4. RESUMO GERAL GLOBAL NO RODAPÉ */}
+          {/* 3. RESUMO GERAL GLOBAL NO RODAPÉ */}
           <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
             <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">Resumo Geral do Mês</h3>
             <div className="flex justify-between text-sm font-medium text-slate-500">
