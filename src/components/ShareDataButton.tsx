@@ -54,17 +54,35 @@ const ShareDataButton = () => {
     }
   };
 
-  const handleDownloadFile = () => {
+  const handleDownloadFile = async () => {
     const dataStr = JSON.stringify(getData(), null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    
+    const blob = new Blob([dataStr], { type: 'application/json' });
     const exportFileDefaultName = `finance_backup_${new Date().toISOString().split('T')[0]}.json`;
-    
+    const file = new File([blob], exportFileDefaultName, { type: 'application/json' });
+
+    // Try to share via Web Share API if supported
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Backup Finance.io',
+          text: 'Seu backup de finanças',
+        });
+        showSuccess('Backup compartilhado com sucesso!');
+        return;
+      } catch (shareErr) {
+        // If sharing fails, fallback to download
+        console.warn('Share failed, falling back to download', shareErr);
+      }
+    }
+
+    // Fallback: trigger download
     const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.href = URL.createObjectURL(blob);
+    linkElement.download = exportFileDefaultName;
     linkElement.click();
-    showSuccess("Arquivo de backup gerado!");
+    URL.revokeObjectURL(linkElement.href);
+    showSuccess('Arquivo de backup gerado!');
   };
 
   const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,7 +135,7 @@ const ShareDataButton = () => {
             <p>Backup e Sincronização</p>
           </TooltipContent>
         </Tooltip>
-
+        
         <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2">
           <DropdownMenuLabel className="text-xs font-bold uppercase text-slate-400 px-2 py-1">Transferir Dados</DropdownMenuLabel>
           <DropdownMenuItem onClick={handleShareLink} className="rounded-xl gap-2 cursor-pointer">
