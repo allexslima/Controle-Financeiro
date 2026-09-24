@@ -36,4 +36,5 @@ export interface Transaction {
   isRecurring?: boolean;
   groupId?: string;
   isCompleted?: boolean;
+  order: number; // For manual ordering
 }
