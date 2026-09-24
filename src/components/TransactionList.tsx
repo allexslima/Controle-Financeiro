@@ -17,7 +17,7 @@ import {
   Clock,
   Repeat,
   Layers,
-  GripperHorizontal,
+  GripperVertical,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -203,7 +203,7 @@ const TransactionList = ({
           <div className="flex items-center gap-3">
             {/* Drag handle */}
             <div className="flex items-center">
-              <GripperHorizontal
+              <GripperVertical
                 size={16}
                 className="text-slate-400 cursor-grab dragging:cursor-grabbing"
               />
