@@ -17,7 +17,6 @@ import {
   Clock,
   Repeat,
   Layers,
-  GripperVertical,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -200,96 +199,97 @@ const TransactionList = ({
               <CheckCircle2 size={18} className="text-emerald-500" />
             )}
           </div>
-          <div className="flex items-center gap-3">
-            {/* Drag handle */}
-            <div className="flex items-center">
-              <GripperVertical
-                size={16}
-                className="text-slate-400 cursor-grab dragging:cursor-grabbing"
-              />
-            </div>
-            <div className={cn(
-              "p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm relative"
-            )}>
-              {getMethodIcon(transaction.method)}
+          <div className={cn(
+            "p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm relative"
+          )}>
+            {getMethodIcon(transaction.method)}
+            {isRecurring && (
+              <div
+                className="absolute -top-1 -right-1 bg-primary text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
+              >
+                <Repeat size={8} />
+              </div>
+            )}
+            {isInstallment && !isRecurring && (
+              <div
+                className="absolute -top-1 -right-1 bg-slate-500 text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
+              >
+                <Layers size={8} />
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                {displayDescription}
+              </p>
               {isRecurring && (
-                <div
-                  className="absolute -top-1 -right-1 bg-primary text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
+                <span
+                  className="text-[8px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-1.5 py-0.5 rounded-md"
                 >
-                  <Repeat size={8} />
-                </div>
+                  Recorrente
+                </span>
               )}
-              {isInstallment && !isRecurring && (
-                <div
-                  className="absolute -top-1 -right-1 bg-slate-500 text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
+              {isInstallment && (
+                <span
+                  className="text-[8px] font-black uppercase tracking-tighter bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md"
                 >
-                  <Layers size={8} />
-                </div>
+                  Parcelado
+                </span>
               )}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                  {displayDescription}
-                </p>
-                {isRecurring && (
-                  <span
-                    className="text-[8px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-1.5 py-0.5 rounded-md"
-                  >
-                    Recorrente
-                  </span>
-                )}
-                {isInstallment && (
-                  <span
-                    className="text-[8px] font-black uppercase tracking-tighter bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md"
-                  >
-                    Parcelado
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                <span className="font-medium">
-                  {transaction.method === "transfer" ||
-                  transaction.method === "investment_apply" ||
-                  transaction.method === "investment_redeem"
-                    ? `${getBankName(transaction.bankId)} → ${getBankName(
-                        transaction.destinationBankId!
-                      )}`
-                    : getBankName(transaction.bankId)}
-                </span>
-                {transaction.category && (
-                  <>
-                    <span>•</span>
-                    <span>{transaction.category}</span>
-                  </>
-                )}
-              </div>
+            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+              <span className="font-medium">
+                {transaction.method === "transfer" ||
+                transaction.method === "investment_apply" ||
+                transaction.method === "investment_redeem"
+                  ? `${getBankName(transaction.bankId)} → ${getBankName(
+                      transaction.destinationBankId!
+                    )}`
+                  : getBankName(transaction.bankId)}
+              </span>
+              {transaction.category && (
+                <>
+                  <span>•</span>
+                  <span>{transaction.category}</span>
+                </>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className={cn(
-                "font-black text-sm",
-                transaction.method === "income"
-                  ? "text-emerald-600"
-                  : (transaction.method === "transfer" ||
-                    transaction.method === "investment_redeem")
-                  ? "text-orange-500"
-                  : "text-rose-600"
-              )}>
-                {transaction.method === "income" ? "+" : ""}
-                {new Intl.NumberFormat("pt-BR", {
-                  style: "currency",
-                  currency: "BRL",
-                }).format(transaction.amount)}
-              </p>
-              <p className="text-[9px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1 font-medium">
-                <Calendar size={10} />
-                {format(parseISO(transaction.date), "dd 'de' MMM", {
-                  locale: ptBR,
-                })}
-              </p>
-            </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className={cn(
+              "font-black text-sm",
+              transaction.method === "income"
+                ? "text-emerald-600"
+                : (transaction.method === "transfer" ||
+                  transaction.method === "investment_redeem")
+                ? "text-orange-500"
+                : "text-rose-600"
+            )}>
+              {transaction.method === "income" ? "+" : ""}
+              {new Intl.NumberFormat("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              }).format(transaction.amount)}
+            </p>
+            <p className="text-[9px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1 font-medium">
+              <Calendar size={10} />
+              {format(parseISO(transaction.date), "dd 'de' MMM", {
+                locale: ptBR,
+              })}
+            </p>
+          </div>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-slate-400 hover:text-primary"
+              onClick={() => onEdit(transaction)}
+            >
+              <Pencil size={14} />
+            </Button>
           </div>
         </div>
       </div>
@@ -367,8 +367,8 @@ const TransactionList = ({
                   <span
                     className="text-[8px] font-black uppercase tracking-tighter bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md"
                   >
-                    Parcelado
-                  </span>
+                  Parcelado
+                </span>
                 )}
               </div>
               <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
