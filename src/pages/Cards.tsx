@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import BankCard from "@/components/BankCard";
+import SwipeableBankCard from "@/components/SwipeableBankCard";
 import TransactionList from "@/components/TransactionList";
 import MonthNavigator from "@/components/MonthNavigator";
 import EditBankDialog from "@/components/EditBankDialog";
@@ -161,19 +162,21 @@ const CardsPage = () => {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {creditCards.map((card) => (
-                  <div key={card.id} className="flex flex-col">
-                    <BankCard
-                      bank={card}
-                      displayBalance={getCompletedInvoice(card)}
-                      onRemove={removeBank}
-                      onEdit={setEditingBank}
-                      onClick={setSelectedCard}
-                    />
-                    <PayInvoiceDialog card={card} banks={banks} onPay={addTransaction} />
-                  </div>
-                ))}
-              </div>
+                              {creditCards.map((card) => (
+                                <div key={card.id} className="flex flex-col">
+                                  <SwipeableBankCard onEdit={() => setEditingBank(card)} onDelete={() => removeBank(card.id)}>
+                                    <BankCard
+                                      bank={card}
+                                      displayBalance={getCompletedInvoice(card)}
+                                      onRemove={removeBank}
+                                      onEdit={setEditingBank}
+                                      onClick={setSelectedCard}
+                                    />
+                                  </SwipeableBankCard>
+                                  <PayInvoiceDialog card={card} banks={banks} onPay={addTransaction} />
+                                </div>
+                              ))}
+                            </div>
             </>
           ) : (
             <div className="space-y-6">

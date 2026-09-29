@@ -1,0 +1,91 @@
+"use client";
+
+import React, { useState, useRef } from "react";
+import { Trash2, Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface SwipeableBankCardProps {
+  children: React.ReactNode;
+  onEdit: (bankId: string) => void;
+  onDelete: (bankId: string) => void;
+}
+
+const SwipeableBankCard = ({
+  children,
+  onEdit,
+  onDelete,
+}: SwipeableBankCardProps) => {
+  const [offsetX, setOffsetX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const startX = useRef(0);
+  const threshold = 80; // Distance to show buttons
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSwiping) return;
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - startX.current;
+
+    // Limit drag between -120 and 120
+    setOffsetX(Math.min(Math.max(diff, -120), 120));
+  };
+
+  const handleTouchEnd = () => {
+    setIsSwiping(false);
+    if (offsetX < -threshold) {
+      setOffsetX(-80);
+    } else if (offsetX > threshold) {
+      setOffsetX(80);
+    } else {
+      setOffsetX(0);
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden bg-slate-100 dark:bg-slate-800">
+      {/* Edit Button (appears when dragging to the right) */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-20 flex items-center justify-center bg-blue-600 text-white cursor-pointer"
+        onClick={() => {
+          // We need bankId; we'll get it from children? We'll pass bankId via closure.
+          // Instead we will call onEdit with bankId from outer scope.
+          // We'll need to adjust: we can't get bankId here. We'll change approach:
+          // We'll pass onEdit and onDelete as functions that expect no args, and the outer
+          // component will bind the bankId.
+          // So we keep as is.
+          onEdit();
+          setOffsetX(0);
+        }}
+      >
+        <Pencil size={20} />
+      </div>
+
+      {/* Delete Button (appears when dragging to the left) */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-20 flex items-center justify-center bg-rose-600 text-white cursor-pointer"
+        onClick={() => {
+          onDelete();
+          setOffsetX(0);
+        }}
+      >
+        <Trash2 size={20} />
+      </div>
+
+      <div
+        className="relative bg-white dark:bg-slate-900 transition-transform duration-200 ease-out"
+        style={{ transform: `translateX(${offsetX}px)` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
+export default SwipeableBankCard;
