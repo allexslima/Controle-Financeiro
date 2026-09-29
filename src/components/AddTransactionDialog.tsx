@@ -56,11 +56,13 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const today = startOfDay(new Date());
 
   const filteredBanks = banks.filter(bank => {
-    if (method === 'credit') return bank.type === 'credit_card';
-    if (method === 'investment_apply') return bank.type === 'account';
-    if (method === 'investment_redeem') return bank.type === 'investment';
-    return bank.type === 'account';
-  });
+      if (method === 'credit') return bank.type === 'credit_card';
+      if (method === 'investment_apply') return bank.type === 'account';
+      if (method === 'investment_redeem') return bank.type === 'investment';
+      // Allow both accounts and credit cards for income
+      if (method === 'income') return bank.type === 'account' || bank.type === 'credit_card';
+      return bank.type === 'account';
+    });
 
   const destinationBanks = banks.filter(bank => {
     if (method === 'investment_apply') return bank.type === 'investment';
@@ -242,9 +244,10 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
 
           <div className="space-y-2">
             <Label>
-              {method === 'investment_redeem' ? 'Conta de Investimento (Origem) *' : 
-               method === 'credit' ? 'Cartão de Crédito *' : 'Conta Bancária (Origem) *'}
-            </Label>
+                          {method === 'investment_redeem' ? 'Conta de Investimento (Origem) *' :
+                           method === 'credit' ? 'Cartão de Crédito *' :
+                           method === 'income' ? 'Conta ou Cartão de Crédito (Origem) *' : 'Conta Bancária (Origem) *'}
+                        </Label>
             <Select onValueChange={setBankId} value={bankId}>
               <SelectTrigger className={cn("rounded-xl", errors.bankId && "border-destructive")}>
                 <SelectValue placeholder="Selecione" />
