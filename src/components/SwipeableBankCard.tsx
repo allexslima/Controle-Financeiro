@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 
 interface SwipeableBankCardProps {
   children: React.ReactNode;
-  onEdit: (bankId: string) => void;
-  onDelete: (bankId: string) => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
 const SwipeableBankCard = ({
@@ -51,12 +51,6 @@ const SwipeableBankCard = ({
       <div
         className="absolute left-0 top-0 bottom-0 w-20 flex items-center justify-center bg-blue-600 text-white cursor-pointer"
         onClick={() => {
-          // We need bankId; we'll get it from children? We'll pass bankId via closure.
-          // Instead we will call onEdit with bankId from outer scope.
-          // We'll need to adjust: we can't get bankId here. We'll change approach:
-          // We'll pass onEdit and onDelete as functions that expect no args, and the outer
-          // component will bind the bankId.
-          // So we keep as is.
           onEdit();
           setOffsetX(0);
         }}
