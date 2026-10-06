@@ -151,16 +151,21 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       if (bank.id === transaction.bankId) {
-        let newBalance = bank.balance;
-        if (transaction.method === "income") {
-          newBalance += (transaction.amount * multiplier);
-        } else if (transaction.method === "credit") {
-          newBalance += (transaction.amount * multiplier);
-        } else {
-          newBalance -= (transaction.amount * multiplier);
-        }
-        return { ...bank, balance: newBalance };
-      }
+              let newBalance = bank.balance;
+              if (transaction.method === "income") {
+                // If it's a credit card, applying income works like a payment (subtract from balance)
+                if (bank.type === "credit_card") {
+                  newBalance -= (transaction.amount * multiplier);
+                } else {
+                  newBalance += (transaction.amount * multiplier);
+                }
+              } else if (transaction.method === "credit") {
+                newBalance += (transaction.amount * multiplier);
+              } else {
+                newBalance -= (transaction.amount * multiplier);
+              }
+              return { ...bank, balance: newBalance };
+            }
       if (
         transaction.method === "transfer" &&
         bank.id === transaction.destinationBankId
