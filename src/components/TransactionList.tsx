@@ -17,6 +17,7 @@ import {
   Clock,
   Repeat,
   Layers,
+  Trash2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -152,158 +153,166 @@ const TransactionList = ({
   };
 
   const renderDraggableItem = (
-      transaction: Transaction,
-      isPending: boolean,
-      section: "pending" | "completed"
-    ) => {
-      const destBank = transaction.destinationBankId
-        ? getBank(transaction.destinationBankId)
-        : null;
-      const isCardPayment =
-        transaction.method === "transfer" && destBank?.type === "credit_card";
-  
-      const isInstallment =
-        transaction.installments && transaction.installments > 1;
-      const isRecurring = transaction.isRecurring;
-      const hasHighlight = isInstallment || isRecurring;
-  
-      // Se for pagamento de fatura e estivermos vendo o cartão, mostrar "Pagamento Recebido"
-      const displayDescription = isCardPayment
-        ? "Pagamento Recebido"
-        : transaction.description;
-  
-      const isDragging = draggedId === transaction.id;
-  
-      const itemContent = (
-        <div
-          draggable={enableReorder}
-          ondragstart={(e) =>
-            handleDragStart(e, transaction.id, section)}
-          ondragend={handleDragEnd}
-          ondragover={handleDragOver}
-          ondrop={(e) =>
-            handleDrop(e, transaction.id, section)}
-          className={cn(
-            "p-4 flex items-center justify-between group cursor-grab dragging:cursor-grabbing",
-            isDragging && "opacity-50 scale-[0.98]",
-            isPending && "opacity-60 grayscale-[0.5] bg-slate-50/50 dark:bg-slate-900/50",
-            hasHighlight && !isPending && "bg-slate-100 dark:bg-slate-800/60"
-          )}
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col items-center justify-center min-w-[24px]">
-              {isPending ? (
-                <Clock size={18} className="text-slate-400" />
-              ) : (
-                <CheckCircle2 size={18} className="text-emerald-500" />
-              )}
-            </div>
-            <div className={cn(
-              "p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm relative"
-            )}>
-              {getMethodIcon(transaction.method)}
-              {isRecurring && (
-                <div
-                  className="absolute -top-1 -right-1 bg-primary text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
-                >
-                  <Repeat size={8} />
-                </div>
-              )}
-              {isInstallment && !isRecurring && (
-                <div
-                  className="absolute -top-1 -right-1 bg-slate-500 text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
-                >
-                  <Layers size={8} />
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                  {displayDescription}
-                </p>
-                {isRecurring && (
-                  <span
-                    className="text-[8px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-1.5 py-0.5 rounded-md"
-                  >
-                    Recorrente
-                  </span>
-                )}
-                {isInstallment && (
-                  <span
-                    className="text-[8px] font-black uppercase tracking-tighter bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md"
-                  >
-                    Parcelado
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                <span className="font-medium">
-                  {transaction.method === "transfer" ||
-                  transaction.method === "investment_apply" ||
-                  transaction.method === "investment_redeem"
-                    ? `${getBankName(transaction.bankId)} → ${getBankName(
-                        transaction.destinationBankId!
-                      )}`
-                    : getBankName(transaction.bankId)}
-                </span>
-                {transaction.category && (
-                  <>
-                    <span>•</span>
-                    <span>{transaction.category}</span>
-                  </>
-                )}
-              </div>
-            </div>
+    transaction: Transaction,
+    isPending: boolean,
+    section: "pending" | "completed"
+  ) => {
+    const destBank = transaction.destinationBankId
+      ? getBank(transaction.destinationBankId)
+      : null;
+    const isCardPayment =
+      transaction.method === "transfer" && destBank?.type === "credit_card";
+
+    const isInstallment =
+      transaction.installments && transaction.installments > 1;
+    const isRecurring = transaction.isRecurring;
+    const hasHighlight = isInstallment || isRecurring;
+
+    // Se for pagamento de fatura e estivermos vendo o cartão, mostrar "Pagamento Recebido"
+    const displayDescription = isCardPayment
+      ? "Pagamento Recebido"
+      : transaction.description;
+
+    const isDragging = draggedId === transaction.id;
+
+    const itemContent = (
+      <div
+        draggable={enableReorder}
+        ondragstart={(e) =>
+          handleDragStart(e, transaction.id, section)}
+        ondragend={handleDragEnd}
+        ondragover={handleDragOver}
+        ondrop={(e) =>
+          handleDrop(e, transaction.id, section)}
+        className={cn(
+          "p-4 flex items-center justify-between group cursor-grab dragging:cursor-grabbing",
+          isDragging && "opacity-50 scale-[0.98]",
+          isPending && "opacity-60 grayscale-[0.5] bg-slate-50/50 dark:bg-slate-900/50",
+          hasHighlight && !isPending && "bg-slate-100 dark:bg-slate-800/60"
+        )}
+      >
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col items-center justify-center min-w-[24px]">
+            {isPending ? (
+              <Clock size={18} className="text-slate-400" />
+            ) : (
+              <CheckCircle2 size={18} className="text-emerald-500" />
+            )}
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className={cn(
-                "font-black text-sm",
-                transaction.method === "income"
-                  ? "text-emerald-600"
-                  : (transaction.method === "transfer" ||
-                    transaction.method === "investment_redeem")
-                  ? "text-orange-500"
-                  : "text-rose-600"
-              )}>
-                {transaction.method === "income" ? "+" : ""}
-                {new Intl.NumberFormat("pt-BR", {
-                  style: "currency",
-                  currency: "BRL",
-                }).format(transaction.amount)}
-              </p>
-              <p className="text-[9px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1 font-medium">
-                <Calendar size={10} />
-                {format(parseISO(transaction.date), "dd 'de' MMM", {
-                  locale: ptBR,
-                })}
-              </p>
-            </div>
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-slate-400 hover:text-primary"
-                onClick={() => onEdit(transaction)}
+          <div className={cn(
+            "p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm relative"
+          )}>
+            {getMethodIcon(transaction.method)}
+            {isRecurring && (
+              <div
+                className="absolute -top-1 -right-1 bg-primary text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
               >
-                <Pencil size={14} />
-              </Button>
+                <Repeat size={8} />
+              </div>
+            )}
+            {isInstallment && !isRecurring && (
+              <div
+                className="absolute -top-1 -right-1 bg-slate-500 text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
+              >
+                <Layers size={8} />
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                {displayDescription}
+              </p>
+              {isRecurring && (
+                <span
+                  className="text-[8px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-1.5 py-0.5 rounded-md"
+                >
+                  Recorrente
+                </span>
+              )}
+              {isInstallment && (
+                <span
+                  className="text-[8px] font-black uppercase tracking-tighter bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md"
+                >
+                  Parcelado
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+              <span className="font-medium">
+                {transaction.method === "transfer" ||
+                transaction.method === "investment_apply" ||
+                transaction.method === "investment_redeem"
+                  ? `${getBankName(transaction.bankId)} → ${getBankName(
+                      transaction.destinationBankId!
+                    )}`
+                  : getBankName(transaction.bankId)}
+              </span>
+              {transaction.category && (
+                <>
+                  <span>•</span>
+                  <span>{transaction.category}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
-      );
-  
-      return (
-        <SwipeableTransactionItem
-          key={transaction.id}
-          onDelete={() => onDelete(transaction.id)}
-          onEdit={() => onEdit(transaction)}
-        >
-          {itemContent}
-        </SwipeableTransactionItem>
-      );
-    };
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className={cn(
+              "font-black text-sm",
+              transaction.method === "income"
+                ? "text-emerald-600"
+                : (transaction.method === "transfer" ||
+                  transaction.method === "investment_redeem")
+                ? "text-orange-500"
+                : "text-rose-600"
+            )}>
+              {transaction.method === "income" ? "+" : ""}
+              {new Intl.NumberFormat("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              }).format(transaction.amount)}
+            </p>
+            <p className="text-[9px] text-slate-400 dark:text-slate-500 flex items-center justify-end gap-1 font-medium">
+              <Calendar size={10} />
+              {format(parseISO(transaction.date), "dd 'de' MMM", {
+                locale: ptBR,
+              })}
+            </p>
+          </div>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-slate-400 hover:text-primary"
+              onClick={() => onEdit(transaction)}
+            >
+              <Pencil size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-slate-400 hover:text-destructive"
+              onClick={() => onDelete(transaction.id)}
+            >
+              <Trash2 size={14} />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+
+    return (
+      <SwipeableTransactionItem
+        key={transaction.id}
+        onDelete={() => onDelete(transaction.id)}
+        onEdit={() => onEdit(transaction)}
+      >
+        {itemContent}
+      </SwipeableTransactionItem>
+    );
+  };
 
   const renderItem = (transaction: Transaction, isPending: boolean) => {
     const destBank = transaction.destinationBankId
@@ -431,6 +440,14 @@ const TransactionList = ({
                 onClick={() => onEdit(transaction)}
               >
                 <Pencil size={14} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-slate-400 hover:text-destructive"
+                onClick={() => onDelete(transaction.id)}
+              >
+                <Trash2 size={14} />
               </Button>
             </div>
           </div>
