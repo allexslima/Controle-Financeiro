@@ -44,6 +44,9 @@ const CardsPage = () => {
     pendingTransactions.forEach((t) => {
       if (t.method === "credit") {
         balance -= t.amount;
+      } else if (t.method === "income") {
+        // Receita no cartão de crédito = pagamento antecipado da fatura
+        balance -= t.amount;
       } else if (
         t.method === "transfer" &&
         t.destinationBankId === card.id
@@ -84,6 +87,7 @@ const CardsPage = () => {
     const calculateBalance = (tList: Transaction[]) => {
       return tList.reduce((acc, t) => {
         if (t.method === "credit") return acc - t.amount;
+        if (t.method === "income") return acc - t.amount; // Receita = pagamento antecipado
         if (
           t.method === "transfer" &&
           t.destinationBankId === selectedCard.id
