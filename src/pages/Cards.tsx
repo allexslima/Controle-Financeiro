@@ -74,9 +74,7 @@ const CardsPage = () => {
         return false;
       const billingMonth = getBillingMonth(t, selectedCard);
       return isSameMonth(billingMonth, currentDate);
-    }).sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+    }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [transactions, selectedCard, currentDate]);
 
   const summaryData = useMemo(() => {

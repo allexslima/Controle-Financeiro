@@ -64,10 +64,13 @@ const TransactionsPage = () => {
   // Agrupamento por Banco de Conta Corrente
   const accountGroups = useMemo(() => {
     return accountBanks.map(bank => {
-      const bankTransactions = transactions.filter(t => 
-        (t.bankId === bank.id || t.destinationBankId === bank.id) &&
-        isSameMonth(parseISO(t.date), currentDate)
-      );
+      const bankTransactions = transactions
+        .filter(t => 
+          (t.bankId === bank.id || t.destinationBankId === bank.id) &&
+          isSameMonth(parseISO(t.date), currentDate)
+        )
+        .slice()
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
       const previousTransactions = transactions.filter(t => 
         (t.bankId === bank.id || t.destinationBankId === bank.id) &&
@@ -95,11 +98,14 @@ const TransactionsPage = () => {
   // Agrupamento por Cartão de Crédito
   const cardGroups = useMemo(() => {
     return creditCardBanks.map(card => {
-      const cardTransactions = transactions.filter(t => {
-        if (t.bankId !== card.id && t.destinationBankId !== card.id) return false;
-        const billingMonth = getBillingMonth(t, banks);
-        return isSameMonth(billingMonth, currentDate);
-      });
+      const cardTransactions = transactions
+        .filter(t => {
+          if (t.bankId !== card.id && t.destinationBankId !== card.id) return false;
+          const billingMonth = getBillingMonth(t, banks);
+          return isSameMonth(billingMonth, currentDate);
+        })
+        .slice()
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
       const previousTransactions = transactions.filter(t => {
         if (t.bankId !== card.id && t.destinationBankId !== card.id) return false;

@@ -80,7 +80,7 @@ const AccountsPage = () => {
     return transactions.filter(t => 
       (t.bankId === selectedBank.id || t.destinationBankId === selectedBank.id) &&
       isSameMonth(parseISO(t.date), currentDate)
-    ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    ).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [transactions, selectedBank, currentDate]);
 
   const selectedSummary = useMemo(() => {

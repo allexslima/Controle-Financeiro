@@ -83,12 +83,14 @@ const TransactionList = ({
   });
 
   const splitTransactions = useMemo(() => {
-    const completed = filteredTransactions.filter(
-      (t) => t.isCompleted === true
-    );
-    const pending = filteredTransactions.filter(
-      (t) => t.isCompleted !== true
-    );
+    const completed = filteredTransactions
+      .filter((t) => t.isCompleted === true)
+      .slice()
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const pending = filteredTransactions
+      .filter((t) => t.isCompleted !== true)
+      .slice()
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     return { completed, pending };
   }, [filteredTransactions]);
 
@@ -140,10 +142,11 @@ const TransactionList = ({
     }
 
     // Get the current list of ids for the section
-    let sectionIds =
+    let sectionIds = (
       draggedFromSection === "pending"
-        ? splitTransactions.pending.map((t) => t.id)
-        : splitTransactions.completed.map((t) => t.id);
+        ? splitTransactions.pending
+        : splitTransactions.completed
+    ).map((t) => t.id);
 
     // Remove the draggedId from the list
     sectionIds = sectionIds.filter((id) => id !== draggedId);
@@ -164,12 +167,9 @@ const TransactionList = ({
     section: "pending" | "completed",
     direction: "up" | "down"
   ) => {
-    const currentList = (section === "pending"
+    const currentList = section === "pending"
       ? splitTransactions.pending
-      : splitTransactions.completed
-    )
-      .slice()
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      : splitTransactions.completed;
 
     const currentIndex = currentList.findIndex((t) => t.id === id);
     if (currentIndex === -1) return;
@@ -586,12 +586,9 @@ const TransactionList = ({
                   </div>
                 )}
                 <div className="space-y-2">
-                  {splitTransactions.pending
-                    .slice()
-                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                    .map((t, idx, arr) =>
-                      renderDraggableItem(t, true, "pending", idx === 0, idx === arr.length - 1)
-                    )}
+                  {splitTransactions.pending.map((t, idx, arr) =>
+                    renderDraggableItem(t, true, "pending", idx === 0, idx === arr.length - 1)
+                  )}
                 </div>
 
                 {splitTransactions.completed.length > 0 && (
@@ -602,12 +599,9 @@ const TransactionList = ({
                   </div>
                 )}
                 <div className="space-y-2">
-                  {splitTransactions.completed
-                    .slice()
-                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                    .map((t, idx, arr) =>
-                      renderDraggableItem(t, false, "completed", idx === 0, idx === arr.length - 1)
-                    )}
+                  {splitTransactions.completed.map((t, idx, arr) =>
+                    renderDraggableItem(t, false, "completed", idx === 0, idx === arr.length - 1)
+                  )}
                 </div>
               </>
             ) : (
