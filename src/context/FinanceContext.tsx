@@ -103,9 +103,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
   }, [banks, transactions, categories]);
 
-  // Carregar dados do Supabase de forma segura e sem loop infinito
+  // Carregar dados do Supabase de forma segura, com paginação total e sem loop
   const refreshFromDatabase = useCallback(async () => {
-    // Evitar requisições simultâneas ou em rajada
     const now = Date.now();
     if (isFetchingRef.current || (now - lastRefreshTimeRef.current < 2000)) {
       return;
@@ -115,23 +114,57 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     lastRefreshTimeRef.current = now;
 
     try {
-      const [banksRes, catRes, txRes] = await Promise.all([
+      const [banksRes, catRes] = await Promise.all([
         supabase.from('banks').select('*'),
         supabase.from('categories').select('*'),
-        supabase.from('transactions').select('*').order('order', { ascending: true }),
       ]);
 
-      // Verificar se a tabela ainda não foi criada no Supabase
       if (
         banksRes.error?.code === 'PGRST205' || 
-        catRes.error?.code === 'PGRST205' || 
-        txRes.error?.code === 'PGRST205'
+        catRes.error?.code === 'PGRST205'
       ) {
         setSyncStatus('needs_tables');
         return;
       }
 
-      if (banksRes.error || catRes.error || txRes.error) {
+      if (banksRes.error || catRes.error) {
+        setSyncStatus('error');
+        return;
+      }
+
+      // Buscar TODAS as transações em páginas para não cortar além do limite de 1000
+      let allTxRows: any[] = [];
+      let from = 0;
+      const PAGE_SIZE = 1000;
+      let hasError = false;
+
+      while (true) {
+        const txRes = await supabase
+          .from('transactions')
+          .select('*')
+          .order('order', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (txRes.error) {
+          if (txRes.error.code === 'PGRST205') {
+            setSyncStatus('needs_tables');
+            return;
+          }
+          console.warn('Erro ao carregar lote de transações:', txRes.error);
+          hasError = true;
+          break;
+        }
+
+        const batch = txRes.data || [];
+        allTxRows = allTxRows.concat(batch);
+
+        if (batch.length < PAGE_SIZE) {
+          break;
+        }
+        from += PAGE_SIZE;
+      }
+
+      if (hasError) {
         setSyncStatus('error');
         return;
       }
@@ -140,11 +173,20 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
       const dbBanks = (banksRes.data || []).map(mapBankFromDb);
       const dbCategories = (catRes.data || []).map(mapCategoryFromDb);
-      const dbTransactions = (txRes.data || []).map(mapTransactionFromDb);
+      const dbTransactions = allTxRows.map(mapTransactionFromDb);
 
-      if (dbBanks.length > 0) setBanks(dbBanks);
-      if (dbCategories.length > 0) setCategories(dbCategories);
-      if (dbTransactions.length > 0) setTransactions(dbTransactions);
+      if (dbBanks.length > 0) {
+        setBanks(dbBanks);
+        localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(dbBanks));
+      }
+      if (dbCategories.length > 0) {
+        setCategories(dbCategories);
+        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(dbCategories));
+      }
+      if (dbTransactions.length > 0) {
+        setTransactions(dbTransactions);
+        localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(dbTransactions));
+      }
     } catch (err) {
       console.warn('Falha na sincronização com Supabase:', err);
       setSyncStatus('error');
