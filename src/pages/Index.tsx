@@ -5,7 +5,6 @@ import AddTransactionDialog from "@/components/AddTransactionDialog";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
-import { MadeWithDyad } from "@/components/made-with-dyad";
 import { TrendingUp, Wallet, BarChart3 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,7 +57,7 @@ const Index = () => {
             </div>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto w-full">
             <Card 
               onClick={() => navigate('/transactions', { state: { selectedDate: currentDate.toISOString() } })}
               className="bg-primary text-primary-foreground border-none shadow-2xl shadow-primary/20 rounded-[2.5rem] overflow-hidden transition-transform hover:scale-[1.02] cursor-pointer"
@@ -92,10 +91,6 @@ const Index = () => {
                 </h3>
               </CardContent>
             </Card>
-          </div>
-
-          <div className="pt-10">
-            <MadeWithDyad />
           </div>
         </div>
       </main>
