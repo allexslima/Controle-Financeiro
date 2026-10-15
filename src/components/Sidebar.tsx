@@ -10,13 +10,17 @@ import {
   PieChart,
   BarChart3,
   CalendarDays,
-  TrendingUp
+  TrendingUp,
+  User,
+  LogIn
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import UndoButton from "./UndoButton";
 import ShareDataButton from "./ShareDataButton";
+import { DatabaseStatus } from "./DatabaseStatus";
+import { useAuth } from "@/context/AuthContext";
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -26,17 +30,19 @@ const menuItems = [
   { icon: Landmark, label: 'Contas', path: '/accounts' },
   { icon: CreditCard, label: 'Cartões', path: '/cards' },
   { icon: BarChart3, label: 'Relatórios', path: '/report' },
+  { icon: User, label: 'Perfil', path: '/profile' },
 ];
 
 const Sidebar = () => {
   const location = useLocation();
+  const { user, profile, signOut } = useAuth();
 
   return (
     <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 flex flex-col h-screen sticky top-0 hidden md:flex">
       <div className="p-8">
         <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white">
+            <div className="w-10 h-10 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-xl flex items-center justify-center transition-colors">
               <PieChart size={24} />
             </div>
             <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
@@ -55,7 +61,7 @@ const Sidebar = () => {
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all",
                 location.pathname === item.path 
-                  ? "bg-primary text-white shadow-lg shadow-primary/20" 
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-lg shadow-black/10 dark:shadow-white/5 font-bold" 
                   : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-slate-100"
               )}
             >
@@ -66,15 +72,47 @@ const Sidebar = () => {
         </nav>
       </div>
 
-      <div className="mt-auto p-8 border-t border-slate-50 dark:border-slate-800 space-y-4">
-        <div className="flex items-center justify-between px-4">
+      <div className="mt-auto p-6 border-t border-slate-50 dark:border-slate-800 space-y-4">
+        <DatabaseStatus />
+
+        {/* User Card */}
+        {user ? (
+          <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 rounded-xl space-y-2.5">
+            <Link to="/profile" className="flex items-center gap-2.5 group">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                {profile?.name ? profile.name.slice(0, 2).toUpperCase() : 'U'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">
+                  {profile?.name}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate">
+                  {profile?.email}
+                </p>
+              </div>
+            </Link>
+            <button 
+              onClick={signOut}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
+            >
+              <LogOut size={13} />
+              Sair da conta
+            </button>
+          </div>
+        ) : (
+          <Link
+            to="/auth"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 hover:bg-primary/15 text-primary rounded-xl text-xs font-bold transition-all"
+          >
+            <LogIn size={15} />
+            Entrar / Criar Perfil
+          </Link>
+        )}
+
+        <div className="flex items-center justify-between px-2 pt-1">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tema</span>
           <ThemeToggle />
         </div>
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all">
-          <LogOut size={20} />
-          Sair da conta
-        </button>
       </div>
     </aside>
   );

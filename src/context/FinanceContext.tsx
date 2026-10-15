@@ -1,9 +1,19 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Bank, Transaction, Category } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { addMonths, parseISO, isAfter, isSameDay } from "date-fns";
+import { 
+  supabase, 
+  safeDbRun,
+  mapBankFromDb, 
+  mapBankToDb, 
+  mapCategoryFromDb, 
+  mapCategoryToDb, 
+  mapTransactionFromDb, 
+  mapTransactionToDb 
+} from "@/lib/supabase";
 
 interface HistoryState {
   banks: Bank[];
@@ -11,10 +21,14 @@ interface HistoryState {
   categories: Category[];
 }
 
+export type SyncStatus = 'connecting' | 'connected' | 'needs_tables' | 'error';
+
 interface FinanceContextType {
   banks: Bank[];
   transactions: Transaction[];
   categories: Category[];
+  syncStatus: SyncStatus;
+  refreshFromDatabase: () => Promise<void>;
   addBank: (bank: Bank) => void;
   removeBank: (id: string) => void;
   updateBank: (bank: Bank) => void;
@@ -48,21 +62,22 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: "cat-inv-redeem", name: "Resgate", color: "#f59e0b" },
 ];
 
+const DEFAULT_BANKS: Bank[] = [
+  { id: "1", name: "Nubank", balance: 0, color: "#8a05be", type: "account" },
+  { id: "2", name: "Itaú", balance: 0, color: "#ec7000", type: "account" },
+  { id: "3", name: "XP Visa", balance: 0, color: "#000000", type: "credit_card", closingDay: 15, dueDay: 22 },
+];
+
 export const FinanceProvider = ({ children }: { children: React.ReactNode }) => {
   const [banks, setBanks] = useState<Bank[]>(() => {
     const saved = localStorage.getItem(BANKS_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [
-      { id: "1", name: "Nubank", balance: 0, color: "#8a05be", type: "account" },
-      { id: "2", name: "Itaú", balance: 0, color: "#ec7000", type: "account" },
-      { id: "3", name: "XP Visa", balance: 0, color: "#000000", type: "credit_card", closingDay: 15, dueDay: 22 },
-    ];
+    return saved ? JSON.parse(saved) : DEFAULT_BANKS;
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Assign order if missing
       return parsed.map((t: Transaction, index: number) => ({
         ...t,
         order: t.order !== undefined ? t.order : index
@@ -77,12 +92,93 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   });
 
   const [history, setHistory] = useState<HistoryState[]>([]);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('connecting');
 
+  // Salvar no localStorage sempre como cache offline
   useEffect(() => {
     localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
     localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
     localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
   }, [banks, transactions, categories]);
+
+  // Carregar dados do Supabase
+  const refreshFromDatabase = useCallback(async () => {
+    try {
+      const [banksRes, catRes, txRes] = await Promise.all([
+        supabase.from('banks').select('*'),
+        supabase.from('categories').select('*'),
+        supabase.from('transactions').select('*').order('order', { ascending: true }),
+      ]);
+
+      // Verificar se a tabela ainda não foi criada no Supabase
+      if (
+        banksRes.error?.code === 'PGRST205' || 
+        catRes.error?.code === 'PGRST205' || 
+        txRes.error?.code === 'PGRST205'
+      ) {
+        setSyncStatus('needs_tables');
+        return;
+      }
+
+      if (banksRes.error || catRes.error || txRes.error) {
+        console.warn('Erro ao carregar do Supabase:', banksRes.error || catRes.error || txRes.error);
+        setSyncStatus('error');
+        return;
+      }
+
+      setSyncStatus('connected');
+
+      // Se o banco estiver vazio no Supabase, fazer o seed inicial dos bancos e categorias
+      const dbBanks = (banksRes.data || []).map(mapBankFromDb);
+      const dbCategories = (catRes.data || []).map(mapCategoryFromDb);
+      const dbTransactions = (txRes.data || []).map(mapTransactionFromDb);
+
+      if (dbBanks.length === 0 && dbCategories.length === 0 && dbTransactions.length === 0) {
+        const initialBanks = banks.length > 0 ? banks : DEFAULT_BANKS;
+        const initialCategories = categories.length > 0 ? categories : DEFAULT_CATEGORIES;
+        
+        await safeDbRun(supabase.from('banks').upsert(initialBanks.map(mapBankToDb)));
+        await safeDbRun(supabase.from('categories').upsert(initialCategories.map(mapCategoryToDb)));
+        if (transactions.length > 0) {
+          await safeDbRun(supabase.from('transactions').upsert(transactions.map(mapTransactionToDb)));
+        }
+      } else {
+        if (dbBanks.length > 0) setBanks(dbBanks);
+        if (dbCategories.length > 0) setCategories(dbCategories);
+        if (dbTransactions.length > 0) setTransactions(dbTransactions);
+      }
+    } catch (err) {
+      console.error('Falha na sincronização inicial com Supabase:', err);
+      setSyncStatus('error');
+    }
+  }, [banks, categories, transactions]);
+
+  useEffect(() => {
+    refreshFromDatabase();
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'banks' },
+        () => { refreshFromDatabase(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => { refreshFromDatabase(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categories' },
+        () => { refreshFromDatabase(); }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const saveHistory = () => {
     setHistory(prev => [
@@ -102,14 +198,28 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(lastState.transactions);
     setCategories(lastState.categories);
     setHistory(prev => prev.slice(0, -1));
+
+    safeDbRun(supabase.from('banks').upsert(lastState.banks.map(mapBankToDb)));
+    safeDbRun(supabase.from('transactions').upsert(lastState.transactions.map(mapTransactionToDb)));
+    safeDbRun(supabase.from('categories').upsert(lastState.categories.map(mapCategoryToDb)));
+
     showSuccess("Ação desfeita!");
   };
 
-  const importFullData = (data: HistoryState) => {
+  const importFullData = async (data: HistoryState) => {
     saveHistory();
-    if (data.banks) setBanks(data.banks);
-    if (data.transactions) setTransactions(data.transactions);
-    if (data.categories) setCategories(data.categories);
+    if (data.banks) {
+      setBanks(data.banks);
+      safeDbRun(supabase.from('banks').upsert(data.banks.map(mapBankToDb)));
+    }
+    if (data.transactions) {
+      setTransactions(data.transactions);
+      safeDbRun(supabase.from('transactions').upsert(data.transactions.map(mapTransactionToDb)));
+    }
+    if (data.categories) {
+      setCategories(data.categories);
+      safeDbRun(supabase.from('categories').upsert(data.categories.map(mapCategoryToDb)));
+    }
   };
 
   const applyTransactionToBalance = (
@@ -151,21 +261,20 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       if (bank.id === transaction.bankId) {
-              let newBalance = bank.balance;
-              if (transaction.method === "income") {
-                // If it's a credit card, applying income works like a payment (subtract from balance)
-                if (bank.type === "credit_card") {
-                  newBalance -= (transaction.amount * multiplier);
-                } else {
-                  newBalance += (transaction.amount * multiplier);
-                }
-              } else if (transaction.method === "credit") {
-                newBalance += (transaction.amount * multiplier);
-              } else {
-                newBalance -= (transaction.amount * multiplier);
-              }
-              return { ...bank, balance: newBalance };
-            }
+        let newBalance = bank.balance;
+        if (transaction.method === "income") {
+          if (bank.type === "credit_card") {
+            newBalance -= (transaction.amount * multiplier);
+          } else {
+            newBalance += (transaction.amount * multiplier);
+          }
+        } else if (transaction.method === "credit") {
+          newBalance += (transaction.amount * multiplier);
+        } else {
+          newBalance -= (transaction.amount * multiplier);
+        }
+        return { ...bank, balance: newBalance };
+      }
       if (
         transaction.method === "transfer" &&
         bank.id === transaction.destinationBankId
@@ -188,19 +297,22 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   const addBank = (newBank: Bank) => {
     saveHistory();
     setBanks(prev => [...prev, newBank]);
+    safeDbRun(supabase.from('banks').insert(mapBankToDb(newBank)));
   };
 
   const removeBank = (id: string) => {
     saveHistory();
     setBanks(prev => prev.filter(b => b.id !== id));
-    setTransactions(
-      prev => prev.filter(t => t.bankId !== id && t.destinationBankId !== id)
-    );
+    setTransactions(prev => prev.filter(t => t.bankId !== id && t.destinationBankId !== id));
+
+    safeDbRun(supabase.from('banks').delete().eq('id', id));
+    safeDbRun(supabase.from('transactions').delete().or(`bank_id.eq.${id},destination_bank_id.eq.${id}`));
   };
 
   const updateBank = (updatedBank: Bank) => {
     saveHistory();
     setBanks(prev => prev.map(b => b.id === updatedBank.id ? updatedBank : b));
+    safeDbRun(supabase.from('banks').upsert(mapBankToDb(updatedBank)));
   };
 
   const addTransaction = (t: Transaction) => {
@@ -212,10 +324,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     const groupId =
       (t.installments || t.isRecurring) ? Math.random().toString(36).substr(2, 9) : undefined;
 
-    // Determine starting order for new transactions
     let maxOrder = -1;
     if (transactions.length > 0) {
-      maxOrder = Math.max(...transactions.map((tx) => tx.order));
+      maxOrder = Math.max(...transactions.map((tx) => tx.order ?? 0));
     }
     let order = maxOrder + 1;
 
@@ -231,7 +342,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
             ? `${t.description} (${i + 1}/${count})`
             : t.description,
         date: installmentDate.toISOString(),
-        order: order, // Assign order
+        order: order,
       };
       newTransactions.push(installmentTransaction);
       updatedBanks = applyTransactionToBalance(
@@ -239,11 +350,14 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         false,
         updatedBanks
       );
-      order++; // Increment order for next installment
+      order++;
     }
 
     setBanks(updatedBanks);
     setTransactions(prev => [...newTransactions, ...prev]);
+
+    safeDbRun(supabase.from('transactions').insert(newTransactions.map(mapTransactionToDb)));
+    safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
   };
 
   const deleteTransaction = (
@@ -275,6 +389,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setBanks(updatedBanks);
     const idsToDelete = toDelete.map((t) => t.id);
     setTransactions(prev => prev.filter((t) => !idsToDelete.includes(t.id)));
+
+    safeDbRun(supabase.from('transactions').delete().in('id', idsToDelete));
+    safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
   };
 
   const updateTransaction = (
@@ -286,6 +403,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     if (!original) return;
 
     let updatedBanks = [...banks];
+    let toUpsertTransactions: Transaction[] = [];
+
     if (mode === "single" || !original.groupId) {
       updatedBanks = applyTransactionToBalance(original, true, updatedBanks);
       updatedBanks = applyTransactionToBalance(updated, false, updatedBanks);
@@ -293,6 +412,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       setTransactions(prev =>
         prev.map((t) => (t.id === updated.id ? updated : t))
       );
+      toUpsertTransactions = [updated];
     } else {
       const related = transactions.filter((t) =>
         t.groupId === original.groupId &&
@@ -314,6 +434,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
             method: updated.method,
           };
           updatedBanks = applyTransactionToBalance(newT, false, updatedBanks);
+          toUpsertTransactions.push(newT);
           return newT;
         }
         return t;
@@ -322,17 +443,22 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       setBanks(updatedBanks);
       setTransactions(updatedTransactions);
     }
+
+    safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(mapTransactionToDb)));
+    safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
   };
 
   const addCategory = (cat: Category) => {
     saveHistory();
     setCategories(prev => [...prev, cat]);
+    safeDbRun(supabase.from('categories').insert(mapCategoryToDb(cat)));
     showSuccess("Categoria adicionada!");
   };
 
   const updateCategory = (cat: Category) => {
     saveHistory();
     setCategories(prev => prev.map(c => c.id === cat.id ? cat : c));
+    safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(cat)));
     showSuccess("Categoria atualizada!");
   };
 
@@ -343,20 +469,23 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     }
     saveHistory();
     setCategories(prev => prev.filter(c => c.id !== id));
+    safeDbRun(supabase.from('categories').delete().eq('id', id));
     showSuccess("Categoria removida!");
   };
 
   const reorderTransactionSection = (transactionIds: string[]) => {
     saveHistory();
-    setTransactions((prev) => {
-      return prev.map((t) => {
-        const index = transactionIds.indexOf(t.id);
-        if (index !== -1) {
-          return { ...t, order: index };
-        }
-        return t;
-      });
+    const updated = transactions.map((t) => {
+      const index = transactionIds.indexOf(t.id);
+      if (index !== -1) {
+        return { ...t, order: index };
+      }
+      return t;
     });
+    setTransactions(updated);
+
+    const reorderedItems = updated.filter(t => transactionIds.includes(t.id));
+    safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(mapTransactionToDb)));
   };
 
   return (
@@ -365,6 +494,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         banks,
         transactions,
         categories,
+        syncStatus,
+        refreshFromDatabase,
         addBank,
         removeBank,
         updateBank,

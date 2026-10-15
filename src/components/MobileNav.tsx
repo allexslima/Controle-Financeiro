@@ -17,10 +17,14 @@ import AddTransactionDialog from "./AddTransactionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import UndoButton from "./UndoButton";
 import ShareDataButton from "./ShareDataButton";
+import { DatabaseStatus } from "./DatabaseStatus";
+import { useAuth } from "@/context/AuthContext";
+import { User } from "lucide-react";
 
 const MobileNav = () => {
   const location = useLocation();
   const { banks, addTransaction } = useFinance();
+  const { user, profile } = useAuth();
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Início', path: '/' },
@@ -34,12 +38,22 @@ const MobileNav = () => {
     <>
       <div className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
+          <div className="w-8 h-8 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-lg flex items-center justify-center transition-colors">
             <PieChart size={18} />
           </div>
           <span className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
         </div>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1.5">
+          <div className="scale-90 origin-right">
+            <DatabaseStatus />
+          </div>
+          <Link
+            to={user ? "/profile" : "/auth"}
+            className="w-8 h-8 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center font-bold text-xs transition-colors"
+            title={user ? "Meu Perfil" : "Entrar / Criar Perfil"}
+          >
+            {user && profile?.name ? profile.name.slice(0, 1).toUpperCase() : <User size={15} />}
+          </Link>
           <UndoButton />
           <ShareDataButton />
         </div>

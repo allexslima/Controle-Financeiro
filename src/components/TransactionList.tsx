@@ -178,11 +178,11 @@ const TransactionList = ({
     const itemContent = (
       <div
         draggable={enableReorder}
-        ondragstart={(e) =>
+        onDragStart={(e) =>
           handleDragStart(e, transaction.id, section)}
-        ondragend={handleDragEnd}
-        ondragover={handleDragOver}
-        ondrop={(e) =>
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDrop={(e) =>
           handleDrop(e, transaction.id, section)}
         className={cn(
           "p-4 flex items-center justify-between group cursor-grab dragging:cursor-grabbing",
@@ -205,7 +205,7 @@ const TransactionList = ({
             {getMethodIcon(transaction.method)}
             {isRecurring && (
               <div
-                className="absolute -top-1 -right-1 bg-primary text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
+                className="absolute -top-1 -right-1 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-full p-0.5 border-2 border-white dark:border-slate-800"
               >
                 <Repeat size={8} />
               </div>
@@ -356,7 +356,7 @@ const TransactionList = ({
               {getMethodIcon(transaction.method)}
               {isRecurring && (
                 <div
-                  className="absolute -top-1 -right-1 bg-primary text-white rounded-full p-0.5 border-2 border-white dark:border-slate-800"
+                  className="absolute -top-1 -right-1 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-full p-0.5 border-2 border-white dark:border-slate-800"
                 >
                   <Repeat size={8} />
                 </div>

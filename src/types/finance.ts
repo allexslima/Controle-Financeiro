@@ -12,6 +12,7 @@ export interface Bank {
   yieldType?: 'pre' | 'cdi'; // Tipo de rendimento: Pré-fixado ou CDI
   yieldRate?: number;      // Taxa de rendimento em % (ex: 12.5 para % a.a. ou 100 para % CDI)
   yieldAmount?: number;    // Valor do rendimento em R$
+  userId?: string;
 }
 
 export type TransactionMethod = 'debit' | 'credit' | 'income' | 'transfer' | 'investment_apply' | 'investment_redeem';
@@ -21,6 +22,7 @@ export interface Category {
   name: string;
   color: string;
   icon?: string;
+  userId?: string;
 }
 
 export interface Transaction {
@@ -36,5 +38,14 @@ export interface Transaction {
   isRecurring?: boolean;
   groupId?: string;
   isCompleted?: boolean;
-  order: number; // For manual ordering
+  order?: number; // For manual ordering
+  userId?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl?: string;
+  createdAt?: string;
 }

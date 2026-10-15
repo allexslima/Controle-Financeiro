@@ -146,7 +146,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
             Nova Transação
           </Button>
         ) : (
-          <Button className="h-16 w-16 rounded-full shadow-2xl shadow-primary/40 flex items-center justify-center p-0 bg-primary text-white hover:scale-110 transition-transform">
+          <Button className="h-16 w-16 rounded-full shadow-2xl shadow-black/20 dark:shadow-white/10 flex items-center justify-center p-0 bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:scale-110 transition-transform">
             <Plus className="h-10 w-10" />
           </Button>
         )}
