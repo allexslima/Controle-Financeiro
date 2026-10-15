@@ -18,6 +18,10 @@ import {
   Repeat,
   Layers,
   Trash2,
+  ArrowUpDown,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -43,7 +47,10 @@ const TransactionList = ({
   enableReorder = false,
 }: TransactionListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isReorderActive, setIsReorderActive] = useState(false);
   const { reorderTransactionSection } = useFinance();
+
+  const isReordering = enableReorder || isReorderActive;
 
   const getBank = (id: string) => banks.find((b) => b.id === id);
   const getBankName = (id: string) => getBank(id)?.name || "Conta removida";
@@ -152,10 +159,37 @@ const TransactionList = ({
     setDraggedFromSection(null);
   };
 
+  const moveItem = (
+    id: string,
+    section: "pending" | "completed",
+    direction: "up" | "down"
+  ) => {
+    const currentList = (section === "pending"
+      ? splitTransactions.pending
+      : splitTransactions.completed
+    )
+      .slice()
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    const currentIndex = currentList.findIndex((t) => t.id === id);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= currentList.length) return;
+
+    const sectionIds = currentList.map((t) => t.id);
+    const [removed] = sectionIds.splice(currentIndex, 1);
+    sectionIds.splice(targetIndex, 0, removed);
+
+    reorderTransactionSection(sectionIds);
+  };
+
   const renderDraggableItem = (
     transaction: Transaction,
     isPending: boolean,
-    section: "pending" | "completed"
+    section: "pending" | "completed",
+    isFirst = false,
+    isLast = false
   ) => {
     const destBank = transaction.destinationBankId
       ? getBank(transaction.destinationBankId)
@@ -177,7 +211,7 @@ const TransactionList = ({
 
     const itemContent = (
       <div
-        draggable={enableReorder}
+        draggable={true}
         onDragStart={(e) =>
           handleDragStart(e, transaction.id, section)}
         onDragEnd={handleDragEnd}
@@ -191,7 +225,49 @@ const TransactionList = ({
           hasHighlight && !isPending && "bg-slate-100 dark:bg-slate-800/60"
         )}
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Controles de Cima / Baixo e Arrastar */}
+          <div className="flex items-center gap-0.5 -ml-1 text-slate-400">
+            <div 
+              title="Segure para arrastar"
+              className="cursor-grab text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 p-0.5"
+            >
+              <GripVertical size={16} />
+            </div>
+            <div className="flex flex-col -space-y-0.5">
+              <button
+                type="button"
+                title="Mover para cima"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  moveItem(transaction.id, section, "up");
+                }}
+                disabled={isFirst}
+                className={cn(
+                  "p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white",
+                  isFirst && "opacity-20 cursor-not-allowed hover:bg-transparent"
+                )}
+              >
+                <ChevronUp size={13} />
+              </button>
+              <button
+                type="button"
+                title="Mover para baixo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  moveItem(transaction.id, section, "down");
+                }}
+                disabled={isLast}
+                className={cn(
+                  "p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white",
+                  isLast && "opacity-20 cursor-not-allowed hover:bg-transparent"
+                )}
+              >
+                <ChevronDown size={13} />
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-col items-center justify-center min-w-[24px]">
             {isPending ? (
               <Clock size={18} className="text-slate-400" />
@@ -458,7 +534,7 @@ const TransactionList = ({
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden border border-slate-100 dark:border-slate-800">
-      <div className="p-6 border-b border-slate-100 dark:border-slate-800 space-y-4">
+      <div className="p-6 border-b border-slate-100 dark:border-slate-800 space-y-3">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
@@ -467,6 +543,29 @@ const TransactionList = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+
+        {/* Botão discreto para ativar a função ordem */}
+        <div className="flex items-center justify-between px-1">
+          <button
+            type="button"
+            onClick={() => setIsReorderActive(!isReorderActive)}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border",
+              isReorderActive
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-sm"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+            )}
+          >
+            <ArrowUpDown size={13} />
+            <span>{isReorderActive ? "Concluir ordenação" : "Organizar ordem"}</span>
+          </button>
+
+          {isReorderActive && (
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+              Use as setas ⬆️ ⬇️ ou arraste
+            </span>
+          )}
         </div>
       </div>
 
@@ -477,7 +576,7 @@ const TransactionList = ({
           </div>
         ) : (
           <>
-            {enableReorder ? (
+            {isReordering ? (
               <>
                 {splitTransactions.pending.length > 0 && (
                   <div className="bg-slate-50/30 dark:bg-slate-800/30 px-6 py-2">
@@ -489,9 +588,9 @@ const TransactionList = ({
                 <div className="space-y-2">
                   {splitTransactions.pending
                     .slice()
-                    .sort((a, b) => a.order - b.order)
-                    .map((t) =>
-                      renderDraggableItem(t, true, "pending")
+                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                    .map((t, idx, arr) =>
+                      renderDraggableItem(t, true, "pending", idx === 0, idx === arr.length - 1)
                     )}
                 </div>
 
@@ -505,9 +604,9 @@ const TransactionList = ({
                 <div className="space-y-2">
                   {splitTransactions.completed
                     .slice()
-                    .sort((a, b) => a.order - b.order)
-                    .map((t) =>
-                      renderDraggableItem(t, false, "completed")
+                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                    .map((t, idx, arr) =>
+                      renderDraggableItem(t, false, "completed", idx === 0, idx === arr.length - 1)
                     )}
                 </div>
               </>

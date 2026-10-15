@@ -19,7 +19,6 @@ import { Link, useLocation } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import UndoButton from "./UndoButton";
 import ShareDataButton from "./ShareDataButton";
-import { DatabaseStatus } from "./DatabaseStatus";
 import { useAuth } from "@/context/AuthContext";
 
 const menuItems = [
@@ -73,15 +72,21 @@ const Sidebar = () => {
       </div>
 
       <div className="mt-auto p-6 border-t border-slate-50 dark:border-slate-800 space-y-4">
-        <DatabaseStatus />
-
         {/* User Card */}
         {user ? (
           <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 rounded-xl space-y-2.5">
             <Link to="/profile" className="flex items-center gap-2.5 group">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                {profile?.name ? profile.name.slice(0, 2).toUpperCase() : 'U'}
-              </div>
+              {profile?.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt={profile.name}
+                  className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                  {profile?.name ? profile.name.slice(0, 2).toUpperCase() : 'U'}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">
                   {profile?.name}

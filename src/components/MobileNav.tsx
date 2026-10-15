@@ -17,7 +17,6 @@ import AddTransactionDialog from "./AddTransactionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import UndoButton from "./UndoButton";
 import ShareDataButton from "./ShareDataButton";
-import { DatabaseStatus } from "./DatabaseStatus";
 import { useAuth } from "@/context/AuthContext";
 import { User } from "lucide-react";
 
@@ -43,16 +42,23 @@ const MobileNav = () => {
           </div>
           <span className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="scale-90 origin-right">
-            <DatabaseStatus />
-          </div>
+        <div className="flex items-center gap-2">
           <Link
             to={user ? "/profile" : "/auth"}
-            className="w-8 h-8 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center font-bold text-xs transition-colors"
+            className="w-8 h-8 rounded-lg overflow-hidden bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center font-bold text-xs transition-colors"
             title={user ? "Meu Perfil" : "Entrar / Criar Perfil"}
           >
-            {user && profile?.name ? profile.name.slice(0, 1).toUpperCase() : <User size={15} />}
+            {user && profile?.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={profile.name}
+                className="w-full h-full object-cover"
+              />
+            ) : user && profile?.name ? (
+              profile.name.slice(0, 1).toUpperCase()
+            ) : (
+              <User size={15} />
+            )}
           </Link>
           <UndoButton />
           <ShareDataButton />

@@ -93,6 +93,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('connecting');
+  const isFetchingRef = React.useRef(false);
+  const lastRefreshTimeRef = React.useRef(0);
 
   // Salvar no localStorage sempre como cache offline
   useEffect(() => {
@@ -101,8 +103,17 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
   }, [banks, transactions, categories]);
 
-  // Carregar dados do Supabase
+  // Carregar dados do Supabase de forma segura e sem loop infinito
   const refreshFromDatabase = useCallback(async () => {
+    // Evitar requisições simultâneas ou em rajada
+    const now = Date.now();
+    if (isFetchingRef.current || (now - lastRefreshTimeRef.current < 2000)) {
+      return;
+    }
+
+    isFetchingRef.current = true;
+    lastRefreshTimeRef.current = now;
+
     try {
       const [banksRes, catRes, txRes] = await Promise.all([
         supabase.from('banks').select('*'),
@@ -121,64 +132,62 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       if (banksRes.error || catRes.error || txRes.error) {
-        console.warn('Erro ao carregar do Supabase:', banksRes.error || catRes.error || txRes.error);
         setSyncStatus('error');
         return;
       }
 
       setSyncStatus('connected');
 
-      // Se o banco estiver vazio no Supabase, fazer o seed inicial dos bancos e categorias
       const dbBanks = (banksRes.data || []).map(mapBankFromDb);
       const dbCategories = (catRes.data || []).map(mapCategoryFromDb);
       const dbTransactions = (txRes.data || []).map(mapTransactionFromDb);
 
-      if (dbBanks.length === 0 && dbCategories.length === 0 && dbTransactions.length === 0) {
-        const initialBanks = banks.length > 0 ? banks : DEFAULT_BANKS;
-        const initialCategories = categories.length > 0 ? categories : DEFAULT_CATEGORIES;
-        
-        await safeDbRun(supabase.from('banks').upsert(initialBanks.map(mapBankToDb)));
-        await safeDbRun(supabase.from('categories').upsert(initialCategories.map(mapCategoryToDb)));
-        if (transactions.length > 0) {
-          await safeDbRun(supabase.from('transactions').upsert(transactions.map(mapTransactionToDb)));
-        }
-      } else {
-        if (dbBanks.length > 0) setBanks(dbBanks);
-        if (dbCategories.length > 0) setCategories(dbCategories);
-        if (dbTransactions.length > 0) setTransactions(dbTransactions);
-      }
+      if (dbBanks.length > 0) setBanks(dbBanks);
+      if (dbCategories.length > 0) setCategories(dbCategories);
+      if (dbTransactions.length > 0) setTransactions(dbTransactions);
     } catch (err) {
-      console.error('Falha na sincronização inicial com Supabase:', err);
+      console.warn('Falha na sincronização com Supabase:', err);
       setSyncStatus('error');
+    } finally {
+      isFetchingRef.current = false;
     }
-  }, [banks, categories, transactions]);
+  }, []);
 
   useEffect(() => {
     refreshFromDatabase();
+
+    let debounceTimer: any = null;
+    const triggerDebouncedRefresh = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        refreshFromDatabase();
+      }, 3000);
+    };
 
     const channel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'banks' },
-        () => { refreshFromDatabase(); }
+        triggerDebouncedRefresh
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'transactions' },
-        () => { refreshFromDatabase(); }
+        triggerDebouncedRefresh
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'categories' },
-        () => { refreshFromDatabase(); }
+        triggerDebouncedRefresh
       )
       .subscribe();
 
     return () => {
+      clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [refreshFromDatabase]);
 
   const saveHistory = () => {
     setHistory(prev => [

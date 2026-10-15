@@ -47,5 +47,6 @@ export interface UserProfile {
   email: string;
   name: string;
   avatarUrl?: string;
+  bio?: string;
   createdAt?: string;
 }
