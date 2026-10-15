@@ -18,6 +18,7 @@ import InvestmentsPage from "./pages/Investments";
 import AuthPage from "./pages/Auth";
 import ProfilePage from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -31,15 +32,19 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<Index />} />
+                {/* Rota pública de login e cadastro */}
                 <Route path="/auth" element={<AuthPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/transactions" element={<TransactionsPage />} />
-                <Route path="/accounts" element={<AccountsPage />} />
-                <Route path="/cards" element={<CardsPage />} />
-                <Route path="/report" element={<ReportPage />} />
-                <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/investments" element={<InvestmentsPage />} />
+
+                {/* Rotas protegidas que exigem autenticação */}
+                <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+                <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
+                <Route path="/accounts" element={<ProtectedRoute><AccountsPage /></ProtectedRoute>} />
+                <Route path="/cards" element={<ProtectedRoute><CardsPage /></ProtectedRoute>} />
+                <Route path="/report" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
+                <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+                <Route path="/investments" element={<ProtectedRoute><InvestmentsPage /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

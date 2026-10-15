@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -11,17 +11,27 @@ import {
   Eye, 
   EyeOff,
   UserPlus,
-  LogIn
+  LogIn,
+  CheckCircle2,
+  LockKeyhole
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { showError } from '@/utils/toast';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const AuthPage = () => {
-  const { signIn, signUp } = useAuth();
+  const { user, loading: authLoading, signIn, signUp } = useAuth();
   const navigate = useNavigate();
+
+  // Redirecionar se já estiver logado
+  useEffect(() => {
+    if (user && !authLoading) {
+      navigate('/', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
@@ -49,7 +59,7 @@ const AuthPage = () => {
     setLoginLoading(false);
 
     if (!error) {
-      navigate('/');
+      navigate('/', { replace: true });
     }
   };
 
@@ -77,24 +87,30 @@ const AuthPage = () => {
     setSignupLoading(false);
 
     if (!error && !requiresEmailConfirmation) {
-      navigate('/');
+      navigate('/', { replace: true });
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center p-4 relative font-sans">
+      
+      {/* Botão de Tema no canto superior */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
       <div className="w-full max-w-md space-y-6">
         
         {/* Header Branding */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-lg shadow-black/10 dark:shadow-white/5 mb-2 transition-colors">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl shadow-black/10 dark:shadow-white/5 mb-1 transition-colors">
             <PieChart size={30} />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             Finance.io
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Controle financeiro pessoal seguro e na nuvem
+            Acesse sua conta para visualizar suas finanças
           </p>
         </div>
 
@@ -157,9 +173,9 @@ const AuthPage = () => {
                 <Button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-full rounded-xl py-5 font-semibold text-sm mt-2 shadow-md shadow-primary/20"
+                  className="w-full rounded-xl py-5 font-semibold text-sm mt-3 shadow-md shadow-primary/20 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
                 >
-                  {loginLoading ? "Entrando..." : "Acessar Minha Conta"}
+                  {loginLoading ? "Entrando..." : "Entrar na Conta"}
                   <ArrowRight size={16} className="ml-2" />
                 </Button>
               </form>
@@ -169,7 +185,7 @@ const AuthPage = () => {
             <TabsContent value="register">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="signup-name">Nome do Perfil / Usuário</Label>
+                  <Label htmlFor="signup-name">Nome Completo / Apelido</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                     <Input
@@ -185,7 +201,7 @@ const AuthPage = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="signup-email">E-mail para Login</Label>
+                  <Label htmlFor="signup-email">E-mail para Acesso</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                     <Input
@@ -242,30 +258,25 @@ const AuthPage = () => {
                 <Button
                   type="submit"
                   disabled={signupLoading}
-                  className="w-full rounded-xl py-5 font-semibold text-sm mt-2 shadow-md shadow-primary/20"
+                  className="w-full rounded-xl py-5 font-semibold text-sm mt-3 shadow-md shadow-primary/20 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
                 >
-                  {signupLoading ? "Criando Perfil..." : "Cadastrar e Criar Perfil"}
+                  {signupLoading ? "Criando Perfil..." : "Cadastrar e Acessar"}
                   <ShieldCheck size={16} className="ml-2" />
                 </Button>
               </form>
             </TabsContent>
           </Tabs>
 
-          {/* Quick guest bypass */}
-          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
-            <button
-              onClick={() => navigate('/')}
-              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium transition-colors"
-            >
-              Continuar em modo offline / demonstração →
-            </button>
+          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+              <span>Dados protegidos e sincronizados com Supabase</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <LockKeyhole size={13} className="text-emerald-500 shrink-0" />
+              <span>Acesso restrito apenas para usuários autenticados</span>
+            </div>
           </div>
-        </div>
-
-        {/* Security badge */}
-        <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
-          <ShieldCheck size={14} className="text-emerald-500" />
-          <span>Autenticação protegida via Supabase Auth</span>
         </div>
 
       </div>
