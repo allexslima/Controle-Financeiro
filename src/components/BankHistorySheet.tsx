@@ -95,12 +95,12 @@ const BankHistorySheet = ({ bank, transactions, onClose, onEdit, onDelete }: Ban
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <p className={`text-sm font-bold ${
-                            item.method === 'income' ? 'text-emerald-600' : 
+                            item.method === 'income' || item.amount < 0 ? 'text-emerald-600' : 
                             item.method === 'transfer' && item.destinationBankId === bank.id ? 'text-emerald-600' :
                             'text-rose-600'
                           }`}>
-                            {item.method === 'income' || (item.method === 'transfer' && item.destinationBankId === bank.id) ? '+' : '-'} 
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)}
+                            {item.amount < 0 ? '' : item.method === 'income' || (item.method === 'transfer' && item.destinationBankId === bank.id) ? '+' : '-'} 
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(item.amount))}
                           </p>
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

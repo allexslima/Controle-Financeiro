@@ -299,6 +299,11 @@ const TransactionList = ({
               <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">
                 {displayDescription}
               </p>
+              {transaction.amount < 0 && (
+                <span className="text-[8px] font-black uppercase tracking-tighter bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-md">
+                  Estorno
+                </span>
+              )}
               {isRecurring && (
                 <span
                   className="text-[8px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-1.5 py-0.5 rounded-md"
@@ -337,12 +342,12 @@ const TransactionList = ({
           <div className="text-right">
             <p className={cn(
               "font-black text-sm",
-              transaction.method === "income"
-                ? "text-emerald-600"
+              transaction.method === "income" || transaction.amount < 0
+                ? "text-emerald-600 dark:text-emerald-400"
                 : (transaction.method === "transfer" ||
                   transaction.method === "investment_redeem")
                 ? "text-orange-500"
-                : "text-rose-600"
+                : "text-rose-600 dark:text-rose-400"
             )}>
               {transaction.method === "income" ? "+" : ""}
               {new Intl.NumberFormat("pt-BR", {
@@ -450,6 +455,11 @@ const TransactionList = ({
                 <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">
                   {displayDescription}
                 </p>
+                {transaction.amount < 0 && (
+                  <span className="text-[8px] font-black uppercase tracking-tighter bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-md">
+                    Estorno
+                  </span>
+                )}
                 {isRecurring && (
                   <span
                     className="text-[8px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-1.5 py-0.5 rounded-md"
@@ -488,12 +498,12 @@ const TransactionList = ({
             <div className="text-right">
               <p className={cn(
                 "font-black text-sm",
-                transaction.method === "income"
-                  ? "text-emerald-600"
+                transaction.method === "income" || transaction.amount < 0
+                  ? "text-emerald-600 dark:text-emerald-400"
                   : (transaction.method === "transfer" ||
                     transaction.method === "investment_redeem")
                   ? "text-orange-500"
-                  : "text-rose-600"
+                  : "text-rose-600 dark:text-rose-400"
               )}>
                 {transaction.method === "income" ? "+" : ""}
                 {new Intl.NumberFormat("pt-BR", {
