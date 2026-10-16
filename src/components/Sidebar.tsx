@@ -37,16 +37,18 @@ const Sidebar = () => {
   const { user, profile, signOut } = useAuth();
 
   return (
-    <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 flex flex-col h-screen sticky top-0 hidden md:flex">
-      <div className="p-8">
-        <div className="flex items-center justify-between mb-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-xl flex items-center justify-center transition-colors">
-              <PieChart size={24} />
+    <aside className="w-72 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 flex flex-col h-screen sticky top-0 hidden md:flex shrink-0">
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100 dark:border-slate-800/60">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-xl flex items-center justify-center transition-colors shadow-xs shrink-0">
+              <PieChart size={22} />
             </div>
-            <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
+            <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white truncate">
+              Finance.io
+            </span>
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1.5 shrink-0 pl-2">
             <UndoButton />
             <ShareDataButton />
           </div>

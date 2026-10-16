@@ -615,16 +615,9 @@ const ReportPage = () => {
                               style={{ backgroundColor: item.color }} 
                             />
                             <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors">
-                                  {item.name}
-                                </span>
-                                {item.isFullyReimbursed && (
-                                  <span className="text-[9px] font-black uppercase tracking-tight bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                                    Reembolsado
-                                  </span>
-                                )}
-                              </div>
+                              <span className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors">
+                                {item.name}
+                              </span>
                               {item.incomeReimbursement > 0 && (
                                 <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
                                   {currencyFormat(item.grossExpense)} gastos − {currencyFormat(item.incomeReimbursement)} recebidos
@@ -879,11 +872,6 @@ const ReportPage = () => {
                 <p className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
                   {currencyFormat(selectedCategoryStats?.netExpense || 0)}
                 </p>
-                {selectedCategoryStats?.isFullyReimbursed && (
-                  <span className="inline-block mt-1 text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full">
-                    100% Reembolsado
-                  </span>
-                )}
               </div>
             </div>
 
@@ -902,7 +890,7 @@ const ReportPage = () => {
 
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-500">Receitas / Reembolsos</span>
+                  <span className="text-xs font-bold text-slate-500">Receitas / Entradas</span>
                   <ArrowUpRight size={16} className="text-emerald-500" />
                 </div>
                 <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">

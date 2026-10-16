@@ -3,6 +3,7 @@
 import React, { useRef } from 'react';
 import { Share2, Download, Upload, FileJson } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useFinance } from "@/context/FinanceContext";
 import { showSuccess, showError } from "@/utils/toast";
 import {
@@ -19,7 +20,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const ShareDataButton = () => {
+interface ShareDataButtonProps {
+  className?: string;
+}
+
+const ShareDataButton = ({ className }: ShareDataButtonProps) => {
   const { banks, transactions, categories, importFullData } = useFinance();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,9 +130,12 @@ const ShareDataButton = () => {
               <Button
                 variant="outline"
                 size="icon"
-                className="rounded-xl h-10 w-10 border-slate-200 text-slate-500 hover:text-primary hover:border-primary transition-all bg-white dark:bg-slate-900"
+                className={cn(
+                  "rounded-xl h-8 w-8 border-slate-200/90 dark:border-slate-800 text-slate-500 hover:text-primary hover:border-primary/40 hover:bg-slate-50 dark:hover:bg-slate-900 transition-all bg-white dark:bg-slate-950 shadow-xs shrink-0",
+                  className
+                )}
               >
-                <Share2 size={18} />
+                <Share2 size={15} />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
