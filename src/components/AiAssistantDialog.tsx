@@ -75,7 +75,7 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
     if (SpeechRecognition) {
       setSpeechSupported(true);
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'pt-BR';
 
@@ -85,17 +85,12 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
 
       recognition.onresult = (event: any) => {
         let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript + ' ';
         }
-        setInput(transcript);
-
-        // Se for resultado final
-        if (event.results[0].isFinal) {
-          setIsListening(false);
-          if (transcript.trim()) {
-            handleSendMessage(transcript.trim());
-          }
+        const clean = transcript.trim();
+        if (clean) {
+          setInput(clean);
         }
       };
 
@@ -111,6 +106,16 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
       recognitionRef.current = recognition;
     }
   }, []);
+
+  // Parar gravação se o modal for fechado
+  useEffect(() => {
+    if (!open && isListening) {
+      try {
+        recognitionRef.current?.stop();
+      } catch (_e) {}
+      setIsListening(false);
+    }
+  }, [open, isListening]);
 
   // Rolar para a última mensagem
   useEffect(() => {
@@ -447,16 +452,17 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
         <div className="p-3 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 space-y-2">
           {/* Alerta animado enquanto ouve */}
           {isListening && (
-            <div className="flex items-center justify-between px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-bold animate-pulse">
+            <div className="flex items-center justify-between px-3.5 py-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-semibold animate-pulse">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                <span>Ouvindo sua voz... Fale o comando</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+                <span>Ouvindo sua voz... Fale à vontade e clique em <strong>Enviar</strong> quando terminar</span>
               </div>
               <button
+                type="button"
                 onClick={toggleListening}
-                className="text-[11px] underline hover:no-underline font-semibold"
+                className="text-[11px] px-2 py-0.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 hover:bg-rose-200 text-rose-700 dark:text-rose-300 font-bold transition-colors shrink-0"
               >
-                Parar
+                Pausar microfone
               </button>
             </div>
           )}
@@ -476,10 +482,10 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
               onClick={toggleListening}
               className={`rounded-2xl h-11 w-11 shrink-0 transition-all ${
                 isListening
-                  ? 'bg-rose-500 text-white border-rose-600 animate-bounce shadow-lg shadow-rose-500/30'
+                  ? 'bg-rose-500 text-white border-rose-600 animate-pulse shadow-lg shadow-rose-500/30'
                   : 'bg-violet-600/10 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-900/50'
               }`}
-              title={isListening ? 'Parar gravação' : 'Falar por voz'}
+              title={isListening ? 'Pausar microfone' : 'Falar por voz'}
             >
               {isListening ? <MicOff size={20} /> : <Mic size={20} />}
             </Button>
@@ -489,7 +495,7 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? 'Ouvindo...' : 'Fale ou digite: "Adicione 50 no cartão de crédito"...'}
+              placeholder={isListening ? 'Transcrevendo sua fala em tempo real...' : 'Fale ou digite: "Adicione 50 no cartão de crédito"...'}
               disabled={isLoading}
               className="flex-1 px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-900 dark:text-white placeholder:text-slate-400"
             />
@@ -498,7 +504,11 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
             <Button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="rounded-2xl h-11 px-4 bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 font-bold shrink-0 gap-1.5 shadow-sm"
+              className={`rounded-2xl h-11 px-4 font-bold shrink-0 gap-1.5 shadow-sm transition-all ${
+                isListening && input.trim()
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400/40'
+                  : 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100'
+              }`}
             >
               <Send size={16} />
               <span className="hidden sm:inline text-xs">Enviar</span>
