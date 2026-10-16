@@ -48,12 +48,22 @@ const TransactionList = ({
 }: TransactionListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isReorderActive, setIsReorderActive] = useState(false);
-  const { reorderTransactionSection } = useFinance();
+  const { reorderTransactionSection, categories = [] } = useFinance();
 
   const isReordering = enableReorder || isReorderActive;
 
   const getBank = (id: string) => banks.find((b) => b.id === id);
   const getBankName = (id: string) => getBank(id)?.name || "Conta removida";
+
+  const getCategory = (catIdOrName?: string) => {
+    if (!catIdOrName) return null;
+    return categories.find((c) => c.id === catIdOrName || c.name === catIdOrName) || null;
+  };
+
+  const getCategoryName = (catIdOrName?: string) => {
+    if (!catIdOrName) return "";
+    return getCategory(catIdOrName)?.name || catIdOrName;
+  };
 
   const getMethodIcon = (method: string) => {
     switch (method) {
@@ -76,9 +86,11 @@ const TransactionList = ({
 
   const filteredTransactions = transactions.filter((t) => {
     const search = searchTerm.toLowerCase();
+    const catName = getCategoryName(t.category).toLowerCase();
     return (
       t.description.toLowerCase().includes(search) ||
-      t.amount.toString().includes(search)
+      t.amount.toString().includes(search) ||
+      catName.includes(search)
     );
   });
 
@@ -332,7 +344,15 @@ const TransactionList = ({
               {transaction.category && (
                 <>
                   <span>•</span>
-                  <span>{transaction.category}</span>
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    {getCategory(transaction.category)?.color && (
+                      <span 
+                        className="w-1.5 h-1.5 rounded-full inline-block shrink-0" 
+                        style={{ backgroundColor: getCategory(transaction.category)?.color }}
+                      />
+                    )}
+                    <span>{getCategoryName(transaction.category)}</span>
+                  </span>
                 </>
               )}
             </div>
@@ -488,7 +508,15 @@ const TransactionList = ({
                 {transaction.category && (
                   <>
                     <span>•</span>
-                    <span>{transaction.category}</span>
+                    <span className="inline-flex items-center gap-1 font-medium">
+                      {getCategory(transaction.category)?.color && (
+                        <span 
+                          className="w-1.5 h-1.5 rounded-full inline-block shrink-0" 
+                          style={{ backgroundColor: getCategory(transaction.category)?.color }}
+                        />
+                      )}
+                      <span>{getCategoryName(transaction.category)}</span>
+                    </span>
                   </>
                 )}
               </div>

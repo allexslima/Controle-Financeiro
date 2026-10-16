@@ -805,7 +805,7 @@ const ReportPage = () => {
                           <p className="text-[11px] text-slate-400 flex items-center gap-2">
                             <span>{bank?.name || 'Conta'}</span>
                             <span>•</span>
-                            <span>{t.category || 'Geral'}</span>
+                            <span>{categories.find(c => c.id === t.category || c.name === t.category)?.name || t.category || 'Geral'}</span>
                             <span>•</span>
                             <span>{format(parseISO(t.date), "dd 'de' MMM", { locale: ptBR })}</span>
                           </p>
