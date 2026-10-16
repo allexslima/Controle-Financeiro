@@ -3,6 +3,7 @@
 import React from 'react';
 import { Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useFinance } from "@/context/FinanceContext";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 

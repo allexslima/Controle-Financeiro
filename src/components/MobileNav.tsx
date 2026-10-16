@@ -1,6 +1,4 @@
-"use client";
-
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   ArrowLeftRight, 
@@ -9,7 +7,8 @@ import {
   PlusCircle,
   PieChart,
   BarChart3,
-  CalendarDays
+  CalendarDays,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
@@ -19,11 +18,13 @@ import UndoButton from "./UndoButton";
 import ShareDataButton from "./ShareDataButton";
 import { useAuth } from "@/context/AuthContext";
 import { User } from "lucide-react";
+import AiAssistantDialog from "./AiAssistantDialog";
 
 const MobileNav = () => {
   const location = useLocation();
   const { banks, addTransaction } = useFinance();
   const { user, profile } = useAuth();
+  const [isAiOpen, setIsAiOpen] = useState(false);
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Início', path: '/' },
@@ -35,14 +36,25 @@ const MobileNav = () => {
 
   return (
     <>
-      <div className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 sticky top-0 z-50">
+      <AiAssistantDialog open={isAiOpen} onOpenChange={setIsAiOpen} />
+
+      <div className="md:hidden flex items-center justify-between p-3.5 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-lg flex items-center justify-center transition-colors">
             <PieChart size={18} />
           </div>
-          <span className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
+          <span className="text-base font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setIsAiOpen(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-bold text-xs shadow-sm hover:opacity-90 active:scale-95 transition-all"
+            title="Fale com IA"
+          >
+            <Sparkles size={13} className="animate-pulse text-amber-300" />
+            <span className="text-[11px]">Fale com IA</span>
+          </button>
           <Link
             to={user ? "/profile" : "/auth"}
             className="w-8 h-8 rounded-lg overflow-hidden bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center font-bold text-xs transition-colors"

@@ -1,6 +1,4 @@
-"use client";
-
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   ArrowLeftRight, 
@@ -12,7 +10,8 @@ import {
   CalendarDays,
   TrendingUp,
   User,
-  LogIn
+  LogIn,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
@@ -20,6 +19,7 @@ import ThemeToggle from "./ThemeToggle";
 import UndoButton from "./UndoButton";
 import ShareDataButton from "./ShareDataButton";
 import { useAuth } from "@/context/AuthContext";
+import AiAssistantDialog from "./AiAssistantDialog";
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -35,26 +35,44 @@ const menuItems = [
 const Sidebar = () => {
   const location = useLocation();
   const { user, profile, signOut } = useAuth();
+  const [isAiOpen, setIsAiOpen] = useState(false);
 
   return (
-    <aside className="w-72 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 flex flex-col h-screen sticky top-0 hidden md:flex shrink-0">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100 dark:border-slate-800/60">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-xl flex items-center justify-center transition-colors shadow-xs shrink-0">
-              <PieChart size={22} />
-            </div>
-            <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white truncate">
-              Finance.io
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0 pl-2">
-            <UndoButton />
-            <ShareDataButton />
-          </div>
-        </div>
+    <>
+      <AiAssistantDialog open={isAiOpen} onOpenChange={setIsAiOpen} />
 
-        <nav className="space-y-2">
+      <aside className="w-72 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 flex flex-col h-screen sticky top-0 hidden md:flex shrink-0">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100 dark:border-slate-800/60">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-xl flex items-center justify-center transition-colors shadow-xs shrink-0">
+                <PieChart size={22} />
+              </div>
+              <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white truncate">
+                Finance.io
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 pl-2">
+              <UndoButton />
+              <ShareDataButton />
+            </div>
+          </div>
+
+          <nav className="space-y-1.5">
+            {/* Botão de destaque Fale com IA */}
+            <button
+              type="button"
+              onClick={() => setIsAiOpen(true)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-violet-600 via-indigo-600 to-primary text-white shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer group mb-3"
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles size={18} className="animate-pulse text-amber-300" />
+                <span>Fale com IA</span>
+              </div>
+              <span className="text-[10px] bg-white/20 text-white font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                Voz
+              </span>
+            </button>
           {menuItems.map((item) => (
             <Link
               key={item.label}
@@ -122,6 +140,7 @@ const Sidebar = () => {
         </div>
       </div>
     </aside>
+  </>
   );
 };
 
