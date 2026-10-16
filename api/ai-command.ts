@@ -17,6 +17,13 @@ export default async function handler(req: any, res: any) {
 
   if (req.method === 'POST') {
     try {
+      if (typeof req.body === 'string') {
+        try {
+          req.body = JSON.parse(req.body);
+        } catch (_e) {
+          // keep as string
+        }
+      }
       return await handleAiCommand(req, res);
     } catch (err: any) {
       console.error('Vercel API error:', err);

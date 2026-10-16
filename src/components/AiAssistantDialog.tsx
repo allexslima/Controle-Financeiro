@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { useFinance } from "@/context/FinanceContext";
 import { showSuccess, showError } from "@/utils/toast";
 import { Transaction } from "@/types/finance";
+import { processAiCommandLocally } from "@/utils/aiCommandProcessor";
 
 const currencyFormat = (val: number) => 
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -174,33 +175,53 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/ai-command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: query,
-          banks: banks.map(b => ({
-            id: b.id,
-            name: b.name,
-            type: b.type,
-            balance: b.balance,
-          })),
-          categories: categories.map(c => ({
-            id: c.id,
-            name: c.name,
-          })),
-          currentDate: new Date().toISOString(),
-        }),
-      });
+      let data: any = null;
 
-      if (!response.ok) {
-        throw new Error('Falha na resposta do servidor de IA');
+      // 1. Tentar processar via API do servidor (Gemini)
+      try {
+        const response = await fetch('/api/ai-command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: query,
+            banks: banks.map(b => ({
+              id: b.id,
+              name: b.name,
+              type: b.type,
+              balance: b.balance,
+            })),
+            categories: categories.map(c => ({
+              id: c.id,
+              name: c.name,
+            })),
+            currentDate: new Date().toISOString(),
+          }),
+        });
+
+        if (response.ok) {
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            data = await response.json();
+          }
+        }
+      } catch (_serverErr) {
+        // Falha de rede ou rota inexistente (ex: deploy estático na Vercel)
+        data = null;
       }
 
-      const data = await response.json();
+      // 2. Se a API estiver offline, lenta ou indisponível, processar localmente com precisão imediata
+      if (!data || !data.reply) {
+        data = processAiCommandLocally(
+          query,
+          banks.map(b => ({ id: b.id, name: b.name, type: b.type, balance: b.balance })),
+          categories.map(c => ({ id: c.id, name: c.name })),
+          new Date().toISOString().split('T')[0]
+        );
+      }
+
       let actionExecuted = undefined;
 
-      // Se a IA determinou a adição de uma transação
+      // Se foi determinado o lançamento de uma transação
       if (data.action?.type === 'addTransaction' && data.action.data) {
         const txData = data.action.data;
         const newTx: Transaction = {
@@ -213,9 +234,10 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
           category: txData.category || categories[0]?.id || 'Geral',
           date: txData.date || new Date().toISOString(),
           installments: txData.installments || 1,
+          isCompleted: txData.isCompleted ?? false,
         };
 
-        // Adiciona diretamente no contexto financeiro (atualiza saldo e salva no Supabase)
+        // Adiciona diretamente no contexto financeiro (atualiza saldo e persiste no banco de dados)
         addTransaction(newTx);
         actionExecuted = { type: 'addTransaction', data: newTx };
         showSuccess(`Lançamento de ${currencyFormat(newTx.amount)} adicionado com sucesso!`);
@@ -233,14 +255,22 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
       setMessages(prev => [...prev, aiMessage]);
       speakText(aiReply);
     } catch (err: any) {
-      console.error('Error contacting AI:', err);
-      const errorMsg: Message = {
+      console.warn('Handling local response:', err);
+      // Resposta segura e amigável
+      const safeData = processAiCommandLocally(
+        query,
+        banks.map(b => ({ id: b.id, name: b.name, type: b.type, balance: b.balance })),
+        categories.map(c => ({ id: c.id, name: c.name })),
+        new Date().toISOString().split('T')[0]
+      );
+
+      const aiMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         sender: 'ai',
-        text: 'Desculpe, tive uma instabilidade ao processar seu comando. Você pode tentar novamente?',
+        text: safeData.reply,
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMsg]);
+      setMessages(prev => [...prev, aiMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -248,6 +278,7 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
 
   const quickChips = [
     'Adicione a compra de 50 reais no cartão de crédito',
+    'Compra de 30 reais no crédito com nome Cinema, categoria Lazer',
     'Gastei 35 reais no almoço no débito',
     'Recebi 1.500 reais de salário',
     'Qual o meu saldo total?',

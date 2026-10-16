@@ -63,6 +63,8 @@ const addTransactionDeclaration: FunctionDeclaration = {
   },
 };
 
+import { processAiCommandLocally } from '../utils/aiCommandProcessor';
+
 // Fallback inteligente em Português para garantir funcionamento mesmo se o serviço de IA estiver instável
 function parsePortugueseCommandFallback(
   text: string,
@@ -70,85 +72,7 @@ function parsePortugueseCommandFallback(
   categories: CategoryContext[],
   todayStr: string
 ) {
-  const lower = text.toLowerCase();
-
-  // 1. Extrair valor (ex: "50 reais", "R$ 50,00", "50.00", "50")
-  let amount = 0;
-  const currencyMatch = lower.match(/(?:r\$\s*|de\s+)?(\d+(?:[.,]\d{1,2})?)\s*(?:reais|real|r\$)?/i);
-  if (currencyMatch && currencyMatch[1]) {
-    amount = parseFloat(currencyMatch[1].replace(',', '.'));
-  }
-
-  // 2. Identificar método (cartão de crédito, débito, receita/salário, transferência)
-  let method: 'credit' | 'debit' | 'income' | 'transfer' = 'debit';
-  if (lower.includes('crédito') || lower.includes('credito') || lower.includes('cartão') || lower.includes('cartao')) {
-    method = 'credit';
-  } else if (lower.includes('recebi') || lower.includes('salário') || lower.includes('salario') || lower.includes('entrada') || lower.includes('rendimento') || lower.includes('ganhei')) {
-    method = 'income';
-  } else if (lower.includes('transfere') || lower.includes('transferir') || lower.includes('transferência') || lower.includes('transferencia')) {
-    method = 'transfer';
-  }
-
-  // 3. Identificar banco / cartão
-  let matchedBank = banks.find(b => {
-    const bName = b.name.toLowerCase();
-    return lower.includes(bName);
-  });
-
-  if (!matchedBank) {
-    if (method === 'credit') {
-      // Buscar primeiro cartão de crédito disponível
-      matchedBank = banks.find(b => b.type === 'credit_card') || banks[0];
-    } else {
-      // Buscar primeira conta corrente / carteira
-      matchedBank = banks.find(b => b.type === 'account') || banks[0];
-    }
-  }
-
-  // 4. Identificar categoria
-  let matchedCategory = categories.find(c => lower.includes(c.name.toLowerCase()));
-  const categoryId = matchedCategory ? matchedCategory.id : (categories[0]?.id || 'Geral');
-
-  // 5. Descrição
-  let description = "Compra no cartão de crédito";
-  if (lower.includes('almoço') || lower.includes('almoco')) description = "Almoço";
-  else if (lower.includes('mercado') || lower.includes('supermercado')) description = "Supermercado";
-  else if (lower.includes('combustível') || lower.includes('gasolina')) description = "Combustível";
-  else if (lower.includes('farmácia') || lower.includes('farmacia')) description = "Farmácia";
-  else if (lower.includes('salário') || lower.includes('salario')) description = "Salário";
-  else if (method === 'credit') description = "Compra no cartão de crédito";
-  else if (method === 'income') description = "Receita / Entrada";
-  else description = "Despesa";
-
-  if (amount > 0 && matchedBank) {
-    const formattedVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
-    const targetName = matchedBank.name;
-    const actionLabel = method === 'credit' 
-      ? `no cartão de crédito (${targetName})`
-      : method === 'income' 
-        ? `na conta ${targetName}` 
-        : `na conta ${targetName}`;
-
-    return {
-      reply: `Adicionei a ${method === 'income' ? 'receita' : 'despesa'} de ${formattedVal} ${actionLabel}!`,
-      action: {
-        type: 'addTransaction',
-        data: {
-          description,
-          amount,
-          method,
-          bankId: matchedBank.id,
-          category: categoryId,
-          date: todayStr,
-          installments: 1,
-        },
-      },
-    };
-  }
-
-  return {
-    reply: `Entendido! Você pode me pedir para adicionar despesas, compras no cartão ou receitas. Exemplo: "Adicione a compra de 50 reais no cartão de crédito".`,
-  };
+  return processAiCommandLocally(text, banks, categories, todayStr);
 }
 
 export async function handleAiCommand(req: any, res: any) {
