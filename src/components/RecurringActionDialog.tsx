@@ -18,8 +18,9 @@ interface RecurringActionDialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
-  onAction: (mode: 'single' | 'future' | 'all') => void;
-  type: 'edit' | 'delete';
+  onAction?: (mode: 'single' | 'future' | 'all') => void;
+  onConfirm?: (mode: 'single' | 'future' | 'all') => void;
+  type?: 'edit' | 'delete';
 }
 
 const RecurringActionDialog = ({ 
@@ -28,8 +29,17 @@ const RecurringActionDialog = ({
   title, 
   description, 
   onAction,
-  type 
+  onConfirm,
+  type = 'edit'
 }: RecurringActionDialogProps) => {
+  const triggerAction = (mode: 'single' | 'future' | 'all') => {
+    if (typeof onAction === 'function') {
+      onAction(mode);
+    } else if (typeof onConfirm === 'function') {
+      onConfirm(mode);
+    }
+  };
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="rounded-[2rem]">
@@ -44,7 +54,7 @@ const RecurringActionDialog = ({
             variant="outline" 
             className="justify-start h-12 rounded-xl font-semibold"
             onClick={() => {
-              onAction('single');
+              triggerAction('single');
               onOpenChange(false);
             }}
           >
@@ -55,7 +65,7 @@ const RecurringActionDialog = ({
             variant="outline" 
             className="justify-start h-12 rounded-xl font-semibold"
             onClick={() => {
-              onAction('future');
+              triggerAction('future');
               onOpenChange(false);
             }}
           >
@@ -67,7 +77,7 @@ const RecurringActionDialog = ({
               variant="outline" 
               className="justify-start h-12 rounded-xl font-semibold text-rose-600 hover:text-rose-700"
               onClick={() => {
-                onAction('all');
+                triggerAction('all');
                 onOpenChange(false);
               }}
             >

@@ -44,15 +44,60 @@ import {
   Award,
   Calendar,
   Layers,
-  ArrowRightLeft
+  ArrowRightLeft,
+  ArrowLeft,
+  ChevronRight
 } from "lucide-react";
 import { Transaction } from "@/types/finance";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import TransactionList from "@/components/TransactionList";
+import EditTransactionDialog from "@/components/EditTransactionDialog";
+import RecurringActionDialog from "@/components/RecurringActionDialog";
+import AddTransactionDialog from "@/components/AddTransactionDialog";
 
 const ReportPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const { transactions, categories, banks } = useFinance();
+  const { transactions, categories, banks, addTransaction, updateTransaction, deleteTransaction } = useFinance();
   const [activeTab, setActiveTab] = useState<'categories' | 'evolution' | 'methods'>('categories');
+  const [selectedCategory, setSelectedCategory] = useState<{ id: string; name: string; color: string } | null>(null);
+
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'edit' | 'delete',
+    transaction: Transaction,
+    updatedData?: Transaction
+  } | null>(null);
+
+  const handleDeleteRequest = (id: string) => {
+    const t = transactions.find(item => item.id === id);
+    if (t?.groupId) {
+      setPendingAction({ type: 'delete', transaction: t });
+      setRecurringDialogOpen(true);
+    } else {
+      deleteTransaction(id);
+    }
+  };
+
+  const handleUpdate = (updated: Transaction) => {
+    if (updated.groupId) {
+      setPendingAction({ type: 'edit', transaction: updated, updatedData: updated });
+      setRecurringDialogOpen(true);
+    } else {
+      updateTransaction(updated);
+    }
+  };
+
+  const handleRecurringAction = (mode: 'single' | 'future' | 'all') => {
+    if (!pendingAction) return;
+    if (pendingAction.type === 'delete') {
+      deleteTransaction(pendingAction.transaction.id, mode);
+    } else if (pendingAction.type === 'edit' && pendingAction.updatedData) {
+      updateTransaction(pendingAction.updatedData, mode as 'single' | 'future');
+    }
+    setPendingAction(null);
+  };
 
   const getBank = (id: string) => banks.find(b => b.id === id);
 
@@ -75,42 +120,84 @@ const ReportPage = () => {
       isSameMonth(getBillingMonth(t), currentDate)
     );
 
-    // Receitas
-    const incomeTransactions = monthTransactions.filter(t => t.method === 'income');
-    const totalIncome = incomeTransactions.reduce((acc, t) => acc + t.amount, 0);
-
-    // Despesas (exclui transferências e investimentos)
-    const expenseTransactions = monthTransactions.filter(t => 
-      t.method !== 'income' && 
+    // Todas as movimentações operacionais do mês (exclui transferências e investimentos)
+    const operationalTransactions = monthTransactions.filter(t => 
       t.method !== 'transfer' &&
       t.method !== 'investment_apply' &&
       t.method !== 'investment_redeem'
     );
-    const totalExpenses = expenseTransactions.reduce((acc, t) => acc + t.amount, 0);
 
-    // Saldo Líquido do Mês
-    const netSavings = totalIncome - totalExpenses;
+    // Receitas Totais
+    const incomeTransactions = monthTransactions.filter(t => t.method === 'income');
+    const totalIncome = incomeTransactions.reduce((acc, t) => acc + t.amount, 0);
+
+    // Despesas brutas (exclui receitas)
+    const expenseTransactions = operationalTransactions.filter(t => t.method !== 'income');
+    const grossExpensesTotal = expenseTransactions.reduce((acc, t) => acc + t.amount, 0);
+
+    // Cálculo por categoria: despesas aumentam (+) e receitas/positivos diminuem (-)
+    interface CategoryCalc {
+      grossExpense: number;
+      incomeReimbursement: number;
+      netExpense: number;
+    }
+
+    const categoryCalcMap: Record<string, CategoryCalc> = {};
+
+    operationalTransactions.forEach(t => {
+      const catId = t.category || 'Outros';
+      if (!categoryCalcMap[catId]) {
+        categoryCalcMap[catId] = { grossExpense: 0, incomeReimbursement: 0, netExpense: 0 };
+      }
+
+      if (t.method === 'income') {
+        // Receitas/entradas na mesma categoria diminuem o total da categoria
+        categoryCalcMap[catId].incomeReimbursement += t.amount;
+      } else {
+        // Despesas aumentam o total (valores negativos como estornos reduzem)
+        categoryCalcMap[catId].grossExpense += t.amount;
+      }
+    });
+
+    Object.keys(categoryCalcMap).forEach(catId => {
+      categoryCalcMap[catId].netExpense = 
+        categoryCalcMap[catId].grossExpense - categoryCalcMap[catId].incomeReimbursement;
+    });
+
+    // Categorias com despesas registradas no mês
+    const activeExpenseCategories = Object.entries(categoryCalcMap)
+      .filter(([_, calc]) => calc.grossExpense > 0)
+      .map(([catId, calc]) => {
+        const category = categories.find(c => c.id === catId || c.name === catId) || { 
+          name: catId || 'Diversos', 
+          color: '#64748b' 
+        };
+        const netValue = Math.max(0, calc.netExpense);
+        return {
+          id: catId,
+          name: category.name,
+          value: netValue,
+          rawNet: calc.netExpense,
+          grossExpense: calc.grossExpense,
+          incomeReimbursement: calc.incomeReimbursement,
+          color: category.color,
+          isFullyReimbursed: calc.grossExpense > 0 && calc.netExpense <= 0,
+        };
+      });
+
+    // Total líquido de despesas no mês
+    const totalExpenses = activeExpenseCategories.reduce((acc, c) => acc + c.value, 0);
+
+    // Saldo Líquido do Mês (Entradas menos Saídas do mês)
+    const netSavings = totalIncome - grossExpensesTotal;
     const savingsRate = totalIncome > 0 ? (netSavings / totalIncome) * 100 : 0;
 
-    // Despesas por Categoria
-    const totalsByCategory = expenseTransactions.reduce((acc, t) => {
-      const catId = t.category || 'Outros';
-      acc[catId] = (acc[catId] || 0) + t.amount;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const categoryData = Object.entries(totalsByCategory).map(([catId, amount]) => {
-      const category = categories.find(c => c.id === catId || c.name === catId) || { 
-        name: catId || 'Diversos', 
-        color: '#64748b' 
-      };
-      return {
-        name: category.name,
-        value: amount,
-        color: category.color,
-        percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
-      };
-    }).sort((a, b) => b.value - a.value);
+    const categoryData = activeExpenseCategories
+      .map(item => ({
+        ...item,
+        percentage: totalExpenses > 0 ? (item.value / totalExpenses) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
 
     // Distribuição por Meio de Pagamento
     const methodTotals = expenseTransactions.reduce((acc, t) => {
@@ -140,21 +227,28 @@ const ReportPage = () => {
       dailyMap[day] = 0;
     }
 
-    expenseTransactions.forEach(t => {
+    operationalTransactions.forEach(t => {
       const dayNum = getDate(parseISO(t.date));
       if (dailyMap[dayNum] !== undefined) {
-        dailyMap[dayNum] += t.amount;
+        if (t.method === 'income') {
+          if (categoryCalcMap[t.category]?.grossExpense > 0) {
+            dailyMap[dayNum] = Math.max(0, dailyMap[dayNum] - t.amount);
+          }
+        } else {
+          dailyMap[dayNum] += t.amount;
+        }
       }
     });
 
     const dailyTrendData = Object.entries(dailyMap).map(([dayStr, amount]) => ({
       day: `Dia ${dayStr}`,
       dia: parseInt(dayStr),
-      amount,
+      amount: Math.max(0, amount),
     }));
 
-    // Top 5 Maiores Gastos do Mês
+    // Top 5 Maiores Gastos do Mês (apenas despesas reais positivas)
     const topExpenses = [...expenseTransactions]
+      .filter(t => t.amount > 0)
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
 
@@ -164,6 +258,7 @@ const ReportPage = () => {
     return {
       totalIncome,
       totalExpenses,
+      grossExpensesTotal,
       netSavings,
       savingsRate,
       categoryData,
@@ -174,6 +269,48 @@ const ReportPage = () => {
       transactionCount: monthTransactions.length
     };
   }, [transactions, currentDate, categories, banks]);
+
+  // Transações da categoria selecionada no mês atual
+  const categoryTransactions = useMemo(() => {
+    if (!selectedCategory) return [];
+    return transactions.filter(t => {
+      const matchCategory = 
+        t.category === selectedCategory.id || 
+        t.category === selectedCategory.name;
+      if (!matchCategory) return false;
+
+      // Excluir transferências e investimentos
+      if (t.method === 'transfer' || t.method === 'investment_apply' || t.method === 'investment_redeem') {
+        return false;
+      }
+
+      return isSameMonth(getBillingMonth(t), currentDate);
+    }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [transactions, selectedCategory, currentDate, banks]);
+
+  const selectedCategoryStats = useMemo(() => {
+    if (!selectedCategory) return null;
+    let grossExpense = 0;
+    let incomeReimbursement = 0;
+
+    categoryTransactions.forEach(t => {
+      if (t.method === 'income') {
+        incomeReimbursement += t.amount;
+      } else {
+        grossExpense += t.amount;
+      }
+    });
+
+    const netExpense = Math.max(0, grossExpense - incomeReimbursement);
+    const isFullyReimbursed = grossExpense > 0 && (grossExpense - incomeReimbursement) <= 0;
+
+    return {
+      grossExpense,
+      incomeReimbursement,
+      netExpense,
+      isFullyReimbursed
+    };
+  }, [selectedCategory, categoryTransactions]);
 
   const currencyFormat = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -190,6 +327,11 @@ const ReportPage = () => {
           <p className="text-sm font-black text-white">
             {currencyFormat(data.value)}
           </p>
+          {data.incomeReimbursement > 0 && (
+            <p className="text-emerald-400 font-semibold text-[10px]">
+              {currencyFormat(data.grossExpense)} gastos − {currencyFormat(data.incomeReimbursement)} recebidos
+            </p>
+          )}
           <p className="text-slate-400 font-semibold">
             {data.percentage.toFixed(1)}% de todas as despesas
           </p>
@@ -220,9 +362,10 @@ const ReportPage = () => {
 
       <main className="flex-1 p-4 md:p-10 overflow-y-auto pb-32 md:pb-12">
         <div className="max-w-6xl mx-auto space-y-8">
-          
-          {/* Header Superior com Badge e Navegador */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {!selectedCategory ? (
+            <>
+              {/* Header Superior com Badge e Navegador */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/5 text-primary text-xs font-bold mb-2">
                 <Sparkles size={13} className="text-amber-500 animate-pulse" />
@@ -310,9 +453,16 @@ const ReportPage = () => {
 
           {/* Destaque / Insight Inteligente */}
           {reportMetrics.topCategory && (
-            <div className="bg-gradient-to-r from-blue-600/10 via-indigo-600/10 to-transparent border border-blue-200/60 dark:border-blue-900/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div 
+              onClick={() => setSelectedCategory({ 
+                id: reportMetrics.topCategory.id, 
+                name: reportMetrics.topCategory.name, 
+                color: reportMetrics.topCategory.color 
+              })}
+              className="bg-gradient-to-r from-blue-600/10 via-indigo-600/10 to-transparent border border-blue-200/60 dark:border-blue-900/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:shadow-sm transition-all group"
+            >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
                   <Award size={20} />
                 </div>
                 <div>
@@ -324,8 +474,9 @@ const ReportPage = () => {
                   </p>
                 </div>
               </div>
-              <div className="self-end sm:self-auto text-xs font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
-                {reportMetrics.categoryData.length} categorias ativas
+              <div className="self-end sm:self-auto text-xs font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm flex items-center gap-1 group-hover:bg-blue-50 dark:group-hover:bg-slate-800 transition-colors">
+                <span>Ver movimentações</span>
+                <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
               </div>
             </div>
           )}
@@ -387,12 +538,12 @@ const ReportPage = () => {
                 </CardHeader>
 
                 <CardContent className="p-0 h-[300px] sm:h-[340px] flex items-center justify-center relative">
-                  {reportMetrics.categoryData.length > 0 ? (
+                  {reportMetrics.categoryData.filter(c => c.value > 0).length > 0 ? (
                     <>
                       <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                           <Pie
-                            data={reportMetrics.categoryData}
+                            data={reportMetrics.categoryData.filter(c => c.value > 0)}
                             cx="50%"
                             cy="50%"
                             innerRadius={70}
@@ -400,12 +551,18 @@ const ReportPage = () => {
                             paddingAngle={4}
                             dataKey="value"
                             stroke="transparent"
+                            cursor="pointer"
+                            onClick={(entry: any) => {
+                              if (entry && entry.id) {
+                                setSelectedCategory({ id: entry.id, name: entry.name, color: entry.color });
+                              }
+                            }}
                           >
-                            {reportMetrics.categoryData.map((entry, index) => (
+                            {reportMetrics.categoryData.filter(c => c.value > 0).map((entry, index) => (
                               <Cell 
                                 key={`cell-${index}`} 
                                 fill={entry.color} 
-                                className="transition-transform duration-200 hover:scale-105"
+                                className="transition-transform duration-200 hover:scale-105 cursor-pointer"
                               />
                             ))}
                           </Pie>
@@ -415,7 +572,7 @@ const ReportPage = () => {
 
                       {/* Total no centro da rosca */}
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Líquido</span>
                         <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
                           {currencyFormat(reportMetrics.totalExpenses)}
                         </span>
@@ -434,8 +591,8 @@ const ReportPage = () => {
                 <CardHeader className="p-0 mb-6">
                   <CardTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center justify-between">
                     <span>Ranking por Categoria</span>
-                    <span className="text-xs font-bold text-slate-500">
-                      {reportMetrics.categoryData.length} categorias
+                    <span className="text-xs font-semibold text-slate-400">
+                      Toque para ver movimentações
                     </span>
                   </CardTitle>
                 </CardHeader>
@@ -444,8 +601,9 @@ const ReportPage = () => {
                   {reportMetrics.categoryData.length > 0 ? (
                     reportMetrics.categoryData.map((item, index) => (
                       <div 
-                        key={item.name} 
-                        className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100/80 dark:hover:bg-slate-800 transition-colors"
+                        key={item.id} 
+                        onClick={() => setSelectedCategory({ id: item.id, name: item.name, color: item.color })}
+                        className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100/90 dark:hover:bg-slate-800 transition-all cursor-pointer group hover:scale-[1.01] hover:shadow-sm active:scale-[0.99]"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2.5">
@@ -456,18 +614,38 @@ const ReportPage = () => {
                               className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" 
                               style={{ backgroundColor: item.color }} 
                             />
-                            <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                              {item.name}
-                            </span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors">
+                                  {item.name}
+                                </span>
+                                {item.isFullyReimbursed && (
+                                  <span className="text-[9px] font-black uppercase tracking-tight bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full">
+                                    Reembolsado
+                                  </span>
+                                )}
+                              </div>
+                              {item.incomeReimbursement > 0 && (
+                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                  {currencyFormat(item.grossExpense)} gastos − {currencyFormat(item.incomeReimbursement)} recebidos
+                                </p>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="text-right flex items-center gap-3">
-                            <span className="text-sm font-black text-slate-900 dark:text-white">
+                          <div className="text-right flex items-center gap-2 sm:gap-3">
+                            <span className={cn(
+                              "text-sm font-black",
+                              item.isFullyReimbursed 
+                                ? "text-emerald-600 dark:text-emerald-400" 
+                                : "text-slate-900 dark:text-white"
+                            )}>
                               {currencyFormat(item.value)}
                             </span>
-                            <span className="text-xs font-bold text-slate-400 min-w-[42px] text-right">
+                            <span className="text-xs font-bold text-slate-400 min-w-[38px] text-right">
                               {item.percentage.toFixed(1)}%
                             </span>
+                            <ChevronRight size={16} className="text-slate-400 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </div>
 
@@ -476,8 +654,8 @@ const ReportPage = () => {
                           <div 
                             className="h-full rounded-full transition-all duration-500"
                             style={{ 
-                              width: `${Math.max(item.percentage, 3)}%`,
-                              backgroundColor: item.color 
+                              width: item.isFullyReimbursed ? '100%' : `${Math.max(item.percentage, 3)}%`,
+                              backgroundColor: item.isFullyReimbursed ? '#10b981' : item.color 
                             }} 
                           />
                         </div>
@@ -649,11 +827,135 @@ const ReportPage = () => {
               )}
             </div>
           </Card>
+        </>
+      ) : (
+        <div className="space-y-6">
+          {/* Top Bar da Categoria com Botão Voltar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => setSelectedCategory(null)}
+                className="rounded-2xl gap-2 font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+              >
+                <ArrowLeft size={18} />
+                Voltar para o Relatório
+              </Button>
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+              <AddTransactionDialog banks={banks} onAdd={addTransaction} />
+            </div>
 
+            <MonthNavigator currentDate={currentDate} onChange={setCurrentDate} />
+          </div>
+
+          {/* Hero Card da Categoria Selecionada */}
+          <div 
+            className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 border-l-[10px] relative overflow-hidden"
+            style={{ borderLeftColor: selectedCategory.color }}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span 
+                    className="w-3.5 h-3.5 rounded-full shadow-sm"
+                    style={{ backgroundColor: selectedCategory.color }} 
+                  />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Movimentações da Categoria
+                  </span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
+                  {selectedCategory.name}
+                </h2>
+                <p className="text-xs text-slate-500 mt-1 capitalize">
+                  {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
+                </p>
+              </div>
+
+              <div className="text-left sm:text-right">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Total Líquido da Categoria
+                </p>
+                <p className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
+                  {currencyFormat(selectedCategoryStats?.netExpense || 0)}
+                </p>
+                {selectedCategoryStats?.isFullyReimbursed && (
+                  <span className="inline-block mt-1 text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full">
+                    100% Reembolsado
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Métricas da Categoria */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-500">Despesas Brutas</span>
+                  <ArrowDownRight size={16} className="text-rose-500" />
+                </div>
+                <p className="text-xl font-black text-rose-600 dark:text-rose-400">
+                  {currencyFormat(selectedCategoryStats?.grossExpense || 0)}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Soma de compras e débitos</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-500">Receitas / Reembolsos</span>
+                  <ArrowUpRight size={16} className="text-emerald-500" />
+                </div>
+                <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+                  {currencyFormat(selectedCategoryStats?.incomeReimbursement || 0)}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Valores que abatem o total</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-500">Lançamentos</span>
+                  <Layers size={16} className="text-blue-500" />
+                </div>
+                <p className="text-xl font-black text-slate-900 dark:text-white">
+                  {categoryTransactions.length}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Neste período</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista Completa de Transações da Categoria */}
+          <TransactionList 
+            transactions={categoryTransactions} 
+            banks={banks} 
+            onEdit={setEditingTransaction} 
+            onDelete={handleDeleteRequest}
+          />
         </div>
-      </main>
+      )}
+
+      <EditTransactionDialog 
+        transaction={editingTransaction}
+        banks={banks}
+        onUpdate={handleUpdate}
+        onClose={() => setEditingTransaction(null)}
+      />
+
+      <RecurringActionDialog 
+        open={recurringDialogOpen}
+        onOpenChange={setRecurringDialogOpen}
+        title={pendingAction?.type === 'edit' ? "Editar Transação Recorrente" : "Excluir Transação Recorrente"}
+        description={pendingAction?.type === 'edit' 
+          ? "Esta transação faz parte de um grupo. Como deseja aplicar as alterações?" 
+          : "Esta transação faz parte de um grupo. Como deseja realizar a exclusão?"}
+        type={pendingAction?.type || 'edit'}
+        onAction={handleRecurringAction}
+        onConfirm={handleRecurringAction}
+      />
     </div>
-  );
+  </main>
+</div>
+);
 };
 
 export default ReportPage;
