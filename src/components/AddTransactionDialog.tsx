@@ -48,6 +48,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const [categoryId, setCategoryId] = useState("cat-7");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [installments, setInstallments] = useState("1");
+  const [installmentValueType, setInstallmentValueType] = useState<'total' | 'per_installment'>('total');
   const [isRecurring, setIsRecurring] = useState(false);
   const [isCompleted, setIsCompleted] = useState(true);
   
@@ -103,17 +104,26 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     if (method === 'investment_apply') finalCategory = 'cat-inv-apply';
     if (method === 'investment_redeem') finalCategory = 'cat-inv-redeem';
 
+    const enteredAmount = parseFloat(amount);
+    const parsedInstallments = (method === 'credit' || method === 'debit') ? parseInt(installments) : 1;
+
+    // Se parcelado e o usuário digitou o total da compra, divide igualmente pelas parcelas
+    let finalAmount = enteredAmount;
+    if (parsedInstallments > 1 && installmentValueType === 'total') {
+      finalAmount = Number((enteredAmount / parsedInstallments).toFixed(2));
+    }
+
     const newTransaction: Transaction = {
       id: Math.random().toString(36).substr(2, 9),
       description: method === 'investment_apply' ? `Aplicação: ${description}` : 
                    method === 'investment_redeem' ? `Resgate: ${description}` : description,
-      amount: parseFloat(amount),
+      amount: finalAmount,
       method,
       bankId,
       destinationBankId: (method === 'transfer' || isInvestment) ? destinationBankId : undefined,
       category: finalCategory,
       date: localDate.toISOString(),
-      installments: (method === 'credit' || method === 'debit') ? parseInt(installments) : undefined,
+      installments: parsedInstallments > 1 ? parsedInstallments : undefined,
       isRecurring: isRecurring,
       isCompleted: isCompleted,
     };
@@ -133,6 +143,7 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     setMethod("debit");
     setDate(format(new Date(), "yyyy-MM-dd"));
     setInstallments("1");
+    setInstallmentValueType('total');
     setIsRecurring(false);
     setIsCompleted(true);
     setErrors({});
@@ -292,6 +303,53 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
                   onChange={(e) => setInstallments(e.target.value)}
                   className="rounded-xl"
                 />
+
+                {parseInt(installments) > 1 && (
+                  <div className="p-3 bg-violet-50/70 dark:bg-violet-950/30 rounded-xl border border-violet-100 dark:border-violet-900/40 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span>O valor digitado acima é:</span>
+                      <div className="flex rounded-lg bg-white dark:bg-slate-900 p-0.5 border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <button
+                          type="button"
+                          onClick={() => setInstallmentValueType('total')}
+                          className={cn(
+                            "px-2 py-0.5 rounded-md text-[11px] font-bold transition-all",
+                            installmentValueType === 'total'
+                              ? "bg-violet-600 text-white shadow-xs"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                          )}
+                        >
+                          Total da Compra
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInstallmentValueType('per_installment')}
+                          className={cn(
+                            "px-2 py-0.5 rounded-md text-[11px] font-bold transition-all",
+                            installmentValueType === 'per_installment'
+                              ? "bg-violet-600 text-white shadow-xs"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                          )}
+                        >
+                          Valor da Parcela
+                        </button>
+                      </div>
+                    </div>
+                    {parseFloat(amount) > 0 && (
+                      <p className="text-[11px] text-violet-700 dark:text-violet-300 font-medium">
+                        {installmentValueType === 'total' ? (
+                          <>
+                            Serão lançadas <strong>{installments} parcelas</strong> de <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(amount) / parseInt(installments))}</strong> (Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(amount))})
+                          </>
+                        ) : (
+                          <>
+                            Serão lançadas <strong>{installments} parcelas</strong> de <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(amount))}</strong> (Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(amount) * parseInt(installments))})
+                          </>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">

@@ -56,7 +56,7 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
     {
       id: 'welcome',
       sender: 'ai',
-      text: 'Olá! Sou sua inteligência financeira. Você pode falar ou digitar comandos como: "Adicione a compra de 50 reais no cartão de crédito" ou "Gastei 35 reais no almoço no débito". Como posso te ajudar hoje?',
+      text: 'Olá! Sou sua inteligência financeira. Você pode falar ou digitar com total liberdade, por exemplo: "Comprei um celular de 1.200 reais parcelado em 10 vezes no cartão", "Coloque compra de 300 reais em 3x no Nubank" ou "Gastei 45 no almoço no débito". Como posso ajudar você agora?',
       timestamp: new Date(),
     },
   ]);
@@ -244,8 +244,23 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
 
         // Adiciona diretamente no contexto financeiro (atualiza saldo e persiste no banco de dados)
         addTransaction(newTx);
-        actionExecuted = { type: 'addTransaction', data: newTx };
-        showSuccess(`Lançamento de ${currencyFormat(newTx.amount)} adicionado com sucesso!`);
+        const count = newTx.installments || 1;
+        const total = Number(txData.totalAmount) || (newTx.amount * count);
+
+        actionExecuted = {
+          type: 'addTransaction',
+          data: {
+            ...newTx,
+            totalAmount: total,
+            installmentAmount: newTx.amount,
+          },
+        };
+
+        if (count > 1) {
+          showSuccess(`Compra parcelada adicionada: ${count}x de ${currencyFormat(newTx.amount)} (Total: ${currencyFormat(total)})`);
+        } else {
+          showSuccess(`Lançamento de ${currencyFormat(newTx.amount)} adicionado com sucesso!`);
+        }
       }
 
       const aiReply = data.reply || 'Comando processado com sucesso!';
@@ -397,11 +412,23 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
                           </div>
                         </div>
 
-                        <span className={`text-base font-black ${
-                          action.method === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-white'
-                        }`}>
-                          {currencyFormat(action.amount)}
-                        </span>
+                        <div className="text-right">
+                          <span className={`text-base font-black ${
+                            action.method === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-white'
+                          }`}>
+                            {currencyFormat(action.amount)}
+                          </span>
+                          {action.installments && action.installments > 1 && (
+                            <p className="text-[10px] text-slate-500 font-semibold leading-tight mt-0.5">
+                              {action.installments}x de {currencyFormat(action.amount)}
+                              {action.totalAmount && action.totalAmount !== action.amount && (
+                                <span className="block text-[9px] text-slate-400 font-normal">
+                                  Total: {currencyFormat(action.totalAmount)}
+                                </span>
+                              )}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

@@ -1,8 +1,56 @@
 import { createClient } from '@supabase/supabase-js';
 import { Bank, Category, Transaction } from '@/types/finance';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vzzpvrlahbvbyccpwven.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_PJKCt300r0iq1GsjfJnadQ_eDYWgbj1';
+const DEFAULT_SUPABASE_URL = 'https://vzzpvrlahbvbyccpwven.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_PJKCt300r0iq1GsjfJnadQ_eDYWgbj1';
+
+function resolveSupabaseUrl(raw?: unknown): string {
+  if (!raw || typeof raw !== 'string') {
+    return DEFAULT_SUPABASE_URL;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return DEFAULT_SUPABASE_URL;
+  }
+  // If it's already an absolute HTTP/HTTPS URL
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      new URL(trimmed);
+      return trimmed;
+    } catch {
+      return DEFAULT_SUPABASE_URL;
+    }
+  }
+  // If it contains a domain (e.g. "vzzpvrlahbvbyccpwven.supabase.co")
+  if (trimmed.includes('.')) {
+    const candidate = `https://${trimmed}`;
+    try {
+      new URL(candidate);
+      return candidate;
+    } catch {
+      return DEFAULT_SUPABASE_URL;
+    }
+  }
+  // If it's just the Supabase project reference (e.g. "vzzpvrlahbvbyccpwven")
+  const candidate = `https://${trimmed}.supabase.co`;
+  try {
+    new URL(candidate);
+    return candidate;
+  } catch {
+    return DEFAULT_SUPABASE_URL;
+  }
+}
+
+function resolveSupabaseKey(raw?: unknown): string {
+  if (!raw || typeof raw !== 'string') {
+    return DEFAULT_SUPABASE_ANON_KEY;
+  }
+  const trimmed = raw.trim();
+  return trimmed || DEFAULT_SUPABASE_ANON_KEY;
+}
+
+const supabaseUrl = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
+const supabaseAnonKey = resolveSupabaseKey(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
