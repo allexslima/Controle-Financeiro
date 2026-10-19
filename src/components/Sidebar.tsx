@@ -18,6 +18,7 @@ import { Link, useLocation } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import UndoButton from "./UndoButton";
 import ShareDataButton from "./ShareDataButton";
+import SyncButton from "./SyncButton";
 import { useAuth } from "@/context/AuthContext";
 import AiAssistantDialog from "./AiAssistantDialog";
 
@@ -53,6 +54,7 @@ const Sidebar = () => {
               </span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0 pl-2">
+              <SyncButton />
               <UndoButton />
               <ShareDataButton />
             </div>

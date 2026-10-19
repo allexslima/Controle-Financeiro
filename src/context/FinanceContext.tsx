@@ -28,7 +28,8 @@ interface FinanceContextType {
   transactions: Transaction[];
   categories: Category[];
   syncStatus: SyncStatus;
-  refreshFromDatabase: () => Promise<void>;
+  isRefreshing: boolean;
+  refreshFromDatabase: (force?: boolean) => Promise<void>;
   addBank: (bank: Bank) => void;
   removeBank: (id: string) => void;
   updateBank: (bank: Bank) => void;
@@ -93,6 +94,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('connecting');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const isFetchingRef = React.useRef(false);
   const lastRefreshTimeRef = React.useRef(0);
 
@@ -103,15 +105,16 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
   }, [banks, transactions, categories]);
 
-  // Carregar dados do Supabase de forma segura, com paginação total e sem loop
-  const refreshFromDatabase = useCallback(async () => {
+  // Carregar dados do Supabase de forma segura, com paginação total e sincronização entre múltiplos dispositivos
+  const refreshFromDatabase = useCallback(async (force = false) => {
     const now = Date.now();
-    if (isFetchingRef.current || (now - lastRefreshTimeRef.current < 2000)) {
+    if (isFetchingRef.current || (!force && (now - lastRefreshTimeRef.current < 2000))) {
       return;
     }
 
     isFetchingRef.current = true;
     lastRefreshTimeRef.current = now;
+    setIsRefreshing(true);
 
     try {
       const [banksRes, catRes] = await Promise.all([
@@ -143,6 +146,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
           .from('transactions')
           .select('*')
           .order('order', { ascending: true })
+          .order('created_at', { ascending: true })
           .range(from, from + PAGE_SIZE - 1);
 
         if (txRes.error) {
@@ -192,18 +196,38 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       setSyncStatus('error');
     } finally {
       isFetchingRef.current = false;
+      setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
+    // Sincronização inicial
     refreshFromDatabase();
 
+    // 1. Ouvir retorno ao aplicativo (quando o usuário volta ao computador ou troca de aba)
+    const handleFocusOrVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        refreshFromDatabase(true);
+      }
+    };
+    window.addEventListener('focus', handleFocusOrVisible);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+
+    // 2. Polling periódico de background (a cada 20 segundos enquanto a aba estiver visível)
+    // Mantém o computador atualizado automaticamente mesmo se o Realtime WebSocket estiver bloqueado
+    const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        refreshFromDatabase(false);
+      }
+    }, 20000);
+
+    // 3. Supabase Realtime channel
     let debounceTimer: any = null;
     const triggerDebouncedRefresh = () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        refreshFromDatabase();
-      }, 3000);
+        refreshFromDatabase(true);
+      }, 1000);
     };
 
     const channel = supabase
@@ -226,6 +250,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       .subscribe();
 
     return () => {
+      window.removeEventListener('focus', handleFocusOrVisible);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+      clearInterval(pollInterval);
       clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
@@ -568,6 +595,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         transactions,
         categories,
         syncStatus,
+        isRefreshing,
         refreshFromDatabase,
         addBank,
         removeBank,

@@ -16,6 +16,7 @@ import AddTransactionDialog from "./AddTransactionDialog";
 import { useFinance } from "@/context/FinanceContext";
 import UndoButton from "./UndoButton";
 import ShareDataButton from "./ShareDataButton";
+import SyncButton from "./SyncButton";
 import { useAuth } from "@/context/AuthContext";
 import { User } from "lucide-react";
 import AiAssistantDialog from "./AiAssistantDialog";
@@ -46,6 +47,7 @@ const MobileNav = () => {
           <span className="text-base font-black tracking-tight text-slate-900 dark:text-white">Finance.io</span>
         </div>
         <div className="flex items-center gap-1.5">
+          <SyncButton />
           <button
             type="button"
             onClick={() => setIsAiOpen(true)}
