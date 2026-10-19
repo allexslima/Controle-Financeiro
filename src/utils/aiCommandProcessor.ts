@@ -150,13 +150,39 @@ export function processAiCommandLocally(
   // 2. Extração inteligente de valores e parcelas
   const { installments, totalAmount, installmentAmount } = parseInstallmentDetails(text);
 
-  // 3. Extrair descrição personalizada
+  // 3. Extrair descrição personalizada ou estabelecimento onde a compra foi feita
   let customDescription = "";
   const nameMatch = text.match(
     /(?:com\s+(?:o\s+)?nome|nome|descri[cç][aã]o|chamad[oa]|t[ií]tulo)\s*[:=]?\s*["']?([^.,;\n]+?)["']?(?:\.|\,|$|\s+(?:categoria|na\s+categoria|no\s+valor|no\s+cart[aã]o|no\s+cr[eé]dito|no\s+d[eé]bito|efetivad[oa]|pago|paga))/i
   );
   if (nameMatch && nameMatch[1]) {
     customDescription = nameMatch[1].trim();
+  }
+
+  // Se não achou com "nome:", detecta menção de estabelecimento como "compra no mercado teste no valor de...", "gasto na padaria do joão..."
+  if (!customDescription) {
+    const placeMatch = text.match(
+      /(?:compra|gasto|despesa|paguei|gastei)\s+(?:n[oa]|em)\s+([^.,;\n]+?)\s+(?:no\s+valor|de\s+\d|por\s+\d|com\s+valor|no\s+cart[aã]o|no\s+cr[eé]dito|no\s+d[eé]bito|usando|categoria|efetivad)/i
+    );
+    if (placeMatch && placeMatch[1]) {
+      const candidate = placeMatch[1].trim();
+      if (!/(?:cart[aã]o|cr[eé]dito|d[eé]bito|dinheiro|pix|conta)/i.test(candidate)) {
+        customDescription = candidate.replace(/\b\w/g, (l) => l.toUpperCase());
+      }
+    }
+  }
+
+  // Detecta padrão invertido: "gastei 80 no posto ipiranga", "paguei 50 no mercado teste"
+  if (!customDescription) {
+    const valPlaceMatch = text.match(
+      /(?:gastei|paguei|compra\s+de)\s+\d+(?:[.,]\d+)?\s*(?:reais|r\$)?\s+(?:n[oa]|em)\s+([^.,;\n]+?)(?:\s+no|\s+na|\s+com|$|\.|\,)/i
+    );
+    if (valPlaceMatch && valPlaceMatch[1]) {
+      const candidate = valPlaceMatch[1].trim();
+      if (!/(?:cart[aã]o|cr[eé]dito|d[eé]bito|dinheiro|pix|conta)/i.test(candidate)) {
+        customDescription = candidate.replace(/\b\w/g, (l) => l.toUpperCase());
+      }
+    }
   }
 
   // 4. Extrair status de efetivação

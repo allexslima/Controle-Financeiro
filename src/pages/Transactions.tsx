@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import MonthNavigator from "@/components/MonthNavigator";
@@ -24,6 +24,12 @@ const TransactionsPage = () => {
     if (location.state?.selectedDate) return new Date(location.state.selectedDate);
     return new Date();
   });
+
+  useEffect(() => {
+    if (location.state?.selectedDate) {
+      setCurrentDate(new Date(location.state.selectedDate));
+    }
+  }, [location.state]);
 
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});

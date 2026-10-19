@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import BankCard from "@/components/BankCard";
@@ -20,11 +21,23 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Pencil } from "lucide-react";
 
 const CardsPage = () => {
+  const location = useLocation();
   const { banks, transactions, removeBank, updateBank, deleteTransaction, addTransaction, addBank, updateTransaction } = useFinance();
   const [selectedCard, setSelectedCard] = useState<Bank | null>(null);
   const [editingBank, setEditingBank] = useState<Bank | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Abre automaticamente o cartão especificado quando navegado a partir de um lançamento
+  useEffect(() => {
+    const targetBankId = (location.state as any)?.selectedBankId;
+    if (targetBankId && banks.length > 0) {
+      const card = banks.find((b) => b.id === targetBankId && b.type === "credit_card");
+      if (card) {
+        setSelectedCard(card);
+      }
+    }
+  }, [location.state, banks]);
 
   const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{

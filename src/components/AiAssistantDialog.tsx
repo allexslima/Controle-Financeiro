@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Sparkles, 
   Mic, 
@@ -17,6 +18,7 @@ import {
   ArrowDownRight,
   RotateCcw,
   Loader2,
+  ExternalLink,
   X
 } from 'lucide-react';
 import {
@@ -42,6 +44,7 @@ interface Message {
   actionExecuted?: {
     type: 'addTransaction';
     data: any;
+    isUndone?: boolean;
   };
 }
 
@@ -51,7 +54,8 @@ interface AiAssistantDialogProps {
 }
 
 export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOpenChange }) => {
-  const { banks, categories, addTransaction, undo } = useFinance();
+  const navigate = useNavigate();
+  const { banks, categories, addTransaction, undo, deleteTransaction } = useFinance();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -243,17 +247,21 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
         };
 
         // Adiciona diretamente no contexto financeiro (atualiza saldo e persiste no banco de dados)
-        addTransaction(newTx);
+        const createdTxs = addTransaction(newTx);
         const count = newTx.installments || 1;
         const total = Number(txData.totalAmount) || (newTx.amount * count);
 
         actionExecuted = {
-          type: 'addTransaction',
+          type: 'addTransaction' as const,
           data: {
             ...newTx,
+            id: createdTxs && createdTxs[0] ? createdTxs[0].id : newTx.id,
+            createdTransactionIds: createdTxs ? createdTxs.map(t => t.id) : [newTx.id],
+            groupId: createdTxs && createdTxs[0]?.groupId ? createdTxs[0].groupId : newTx.groupId,
             totalAmount: total,
             installmentAmount: newTx.amount,
           },
+          isUndone: false,
         };
 
         if (count > 1) {
@@ -294,6 +302,56 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleOpenPurchaseLocation = (actionData: any) => {
+    onOpenChange(false); // Fecha o diálogo da IA
+    if (actionData.method === 'credit') {
+      // Abre a tela de cartões já com o cartão selecionado
+      navigate('/cards', {
+        state: {
+          selectedBankId: actionData.bankId,
+          highlightTxId: actionData.id,
+        },
+      });
+    } else {
+      // Abre a tela de transações / extrato da conta
+      navigate('/transactions', {
+        state: {
+          selectedBankId: actionData.bankId,
+          highlightTxId: actionData.id,
+          selectedDate: actionData.date,
+        },
+      });
+    }
+  };
+
+  const handleUndoAction = (messageId: string, actionData: any) => {
+    const createdIds: string[] = actionData.createdTransactionIds || [actionData.id];
+
+    if (createdIds && createdIds.length > 0) {
+      createdIds.forEach((id) => {
+        deleteTransaction(id, 'single');
+      });
+    } else {
+      undo();
+    }
+
+    // Atualiza imediatamente o card nesta mensagem para estado desfeito
+    setMessages(prev => prev.map(m => {
+      if (m.id === messageId && m.actionExecuted) {
+        return {
+          ...m,
+          actionExecuted: {
+            ...m.actionExecuted,
+            isUndone: true,
+          },
+        };
+      }
+      return m;
+    }));
+
+    showSuccess("Lançamento desfeito e apagado com sucesso!");
   };
 
   const quickChips = [
@@ -347,6 +405,7 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
           {messages.map((m) => {
             const isUser = m.sender === 'user';
             const action = m.actionExecuted?.data;
+            const isUndone = !!m.actionExecuted?.isUndone;
             const targetBank = action ? banks.find(b => b.id === action.bankId) : null;
             const targetCategory = action ? categories.find(c => c.id === action.category) : null;
 
@@ -372,31 +431,57 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
                     {m.text}
                   </div>
 
-                  {/* Card de Transação Adicionada */}
+                  {/* Card de Transação Adicionada (Clicável para abrir o local da compra) */}
                   {action && (
-                    <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 text-slate-900 dark:text-white space-y-2.5 animate-in fade-in slide-in-from-bottom-2">
+                    <div 
+                      onClick={() => {
+                        if (!isUndone) {
+                          handleOpenPurchaseLocation(action);
+                        }
+                      }}
+                      className={`p-3.5 rounded-2xl border text-slate-900 dark:text-white space-y-2.5 transition-all duration-200 ${
+                        isUndone
+                          ? 'bg-slate-100/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60 cursor-default'
+                          : 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-800/40 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 hover:border-emerald-400 cursor-pointer shadow-xs group/card'
+                      }`}
+                      title={!isUndone ? 'Clique para abrir o local onde a compra foi registrada' : 'Lançamento desfeito'}
+                    >
                       <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                          <CheckCircle2 size={14} />
-                          Lançamento Confirmado
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            undo();
-                            showSuccess("Lançamento desfeito!");
-                          }}
-                          className="h-6 px-2 text-[11px] font-bold text-slate-500 hover:text-rose-600 gap-1 rounded-lg"
-                        >
-                          <RotateCcw size={12} />
-                          Desfazer
-                        </Button>
+                        {!isUndone ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                            <CheckCircle2 size={14} />
+                            Lançamento Confirmado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 line-through">
+                            <RotateCcw size={13} />
+                            Lançamento Desfeito
+                          </span>
+                        )}
+
+                        {!isUndone ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Evita abrir o local da compra ao clicar em Desfazer
+                              handleUndoAction(m.id, action);
+                            }}
+                            className="h-6 px-2 text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1 rounded-lg"
+                          >
+                            <RotateCcw size={12} />
+                            Desfazer
+                          </Button>
+                        ) : (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-md">
+                            Apagado
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between pt-1">
                         <div>
-                          <p className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                          <p className={`font-bold text-sm ${isUndone ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'}`}>
                             {action.description}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -414,7 +499,9 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
 
                         <div className="text-right">
                           <span className={`text-base font-black ${
-                            action.method === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-white'
+                            isUndone
+                              ? 'line-through text-slate-400 dark:text-slate-500'
+                              : action.method === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-white'
                           }`}>
                             {currencyFormat(action.amount)}
                           </span>
@@ -430,6 +517,19 @@ export const AiAssistantDialog: React.FC<AiAssistantDialogProps> = ({ open, onOp
                           )}
                         </div>
                       </div>
+
+                      {/* Botão/Link para abrir o local onde a compra foi lançada */}
+                      {!isUndone && (
+                        <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-between text-[11px] font-bold text-emerald-700 dark:text-emerald-400 group-hover/card:text-emerald-800 dark:group-hover/card:text-emerald-300">
+                          <span className="inline-flex items-center gap-1.5">
+                            <ExternalLink size={12} />
+                            {action.method === 'credit' ? 'Ver na fatura do cartão' : 'Ver no extrato da conta'}
+                          </span>
+                          <span className="text-[10px] underline font-medium">
+                            Abrir local da compra →
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

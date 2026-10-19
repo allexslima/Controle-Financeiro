@@ -32,7 +32,7 @@ interface FinanceContextType {
   addBank: (bank: Bank) => void;
   removeBank: (id: string) => void;
   updateBank: (bank: Bank) => void;
-  addTransaction: (transaction: Transaction) => void;
+  addTransaction: (transaction: Transaction) => Transaction[];
   deleteTransaction: (id: string, mode?: 'single' | 'future' | 'all') => void;
   updateTransaction: (transaction: Transaction, mode?: 'single' | 'future') => void;
   addCategory: (category: Category) => void;
@@ -245,10 +245,31 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   const undo = () => {
     if (history.length === 0) return;
     const lastState = history[history.length - 1];
+
+    // Identificar itens criados após o último estado para removê-los no Supabase
+    const lastTxIds = new Set(lastState.transactions.map(t => t.id));
+    const txIdsToDelete = transactions.filter(t => !lastTxIds.has(t.id)).map(t => t.id);
+
+    const lastBankIds = new Set(lastState.banks.map(b => b.id));
+    const bankIdsToDelete = banks.filter(b => !lastBankIds.has(b.id)).map(b => b.id);
+
+    const lastCatIds = new Set(lastState.categories.map(c => c.id));
+    const catIdsToDelete = categories.filter(c => !lastCatIds.has(c.id)).map(c => c.id);
+
     setBanks(lastState.banks);
     setTransactions(lastState.transactions);
     setCategories(lastState.categories);
     setHistory(prev => prev.slice(0, -1));
+
+    if (txIdsToDelete.length > 0) {
+      safeDbRun(supabase.from('transactions').delete().in('id', txIdsToDelete));
+    }
+    if (bankIdsToDelete.length > 0) {
+      safeDbRun(supabase.from('banks').delete().in('id', bankIdsToDelete));
+    }
+    if (catIdsToDelete.length > 0) {
+      safeDbRun(supabase.from('categories').delete().in('id', catIdsToDelete));
+    }
 
     safeDbRun(supabase.from('banks').upsert(lastState.banks.map(mapBankToDb)));
     safeDbRun(supabase.from('transactions').upsert(lastState.transactions.map(mapTransactionToDb)));
@@ -409,6 +430,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
     safeDbRun(supabase.from('transactions').insert(newTransactions.map(mapTransactionToDb)));
     safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+    return newTransactions;
   };
 
   const deleteTransaction = (

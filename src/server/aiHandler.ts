@@ -127,7 +127,10 @@ REGRAS DE INTERPRETAÇÃO E COMPREENSÃO CRÍTICAS:
    - Deduza a melhor categoria com base no que foi comprado (ex: refeições -> Alimentação, combustível/uber -> Transporte, celular/tênis/roupas -> Compras, remédio -> Saúde).
    - Use o ID exato da categoria correspondente na chamada.
 
-4. SE FOR UMA CONSULTA OU CONVERSA:
+4. ESTABELECIMENTO / LOCAL DA COMPRA E DESCRIÇÃO:
+   - Se o usuário mencionar o estabelecimento, loja ou local onde comprou (ex: "compra no mercado teste", "padaria central", "posto ipiranga", "shopee", "farmácia pague menos"), PRESERVE esse nome na 'description' (ex: "Mercado Teste", "Padaria Central", "Posto Ipiranga"). NÃO substitua o nome do estabelecimento pelo termo genérico da categoria.
+
+5. SE FOR UMA CONSULTA OU CONVERSA:
    - Se o usuário perguntar saldo, gastos ou como estão as finanças, responda detalhadamente com clareza, empatia e cordialidade em português do Brasil, usando os saldos das contas e faturas informadas acima sem chamar ferramentas.`;
 
   const apiKey = process.env.GEMINI_API_KEY;
