@@ -54,15 +54,65 @@ const supabaseAnonKey = resolveSupabaseKey(import.meta.env.VITE_SUPABASE_ANON_KE
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export const isAuthOrJwtError = (error: any): boolean => {
+  if (!error) return false;
+  const msg = String(error.message || error.details || error.hint || '').toLowerCase();
+  const code = String(error.code || '').toUpperCase();
+  return (
+    code === 'PGRST301' ||
+    code === '401' ||
+    msg.includes('jwt') ||
+    msg.includes('expired') ||
+    msg.includes('token') ||
+    msg.includes('unauthorized') ||
+    msg.includes('invalid claim')
+  );
+};
+
+export const isNetworkOrAdblockError = (error: any): boolean => {
+  if (!error) return false;
+  const msg = String(error.message || error || '').toLowerCase();
+  return (
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('blocked_by_client') ||
+    msg.includes('load failed') ||
+    msg.includes('net::err')
+  );
+};
+
+export const clearSupabaseAuthStorage = () => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('sb-') || key.includes('supabase.auth.token'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {
+      console.warn('Erro ao limpar storage do Supabase:', e);
+    }
+  }
+};
+
 export const safeDbRun = async (promise: PromiseLike<any>) => {
   try {
     const res = await promise;
     if (res?.error) {
       console.warn('Supabase query error:', res.error);
+      if (isAuthOrJwtError(res.error)) {
+        console.warn('Token expirado em escrita. Limpando credenciais locais...');
+        clearSupabaseAuthStorage();
+        await supabase.auth.signOut().catch(() => {});
+      }
     }
     return res;
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Supabase network error:', err);
+    return { error: err };
   }
 };
 

@@ -7,6 +7,9 @@ import { addMonths, parseISO, isAfter, isSameDay } from "date-fns";
 import { 
   supabase, 
   safeDbRun,
+  isAuthOrJwtError,
+  isNetworkOrAdblockError,
+  clearSupabaseAuthStorage,
   mapBankFromDb, 
   mapBankToDb, 
   mapCategoryFromDb, 
@@ -28,8 +31,12 @@ interface FinanceContextType {
   transactions: Transaction[];
   categories: Category[];
   syncStatus: SyncStatus;
+  syncErrorMessage: string | null;
   isRefreshing: boolean;
+  hasUnsyncedChanges: boolean;
   refreshFromDatabase: (force?: boolean) => Promise<void>;
+  repairConnection: () => Promise<void>;
+  pushLocalToDatabase: () => Promise<void>;
   addBank: (bank: Bank) => void;
   removeBank: (id: string) => void;
   updateBank: (bank: Bank) => void;
@@ -94,9 +101,27 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('connecting');
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('finance_io_has_unsynced') === 'true';
+    }
+    return false;
+  });
   const isFetchingRef = React.useRef(false);
   const lastRefreshTimeRef = React.useRef(0);
+
+  // Persistir flag de alterações locais não sincronizadas
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (hasUnsyncedChanges) {
+        localStorage.setItem('finance_io_has_unsynced', 'true');
+      } else {
+        localStorage.removeItem('finance_io_has_unsynced');
+      }
+    }
+  }, [hasUnsyncedChanges]);
 
   // Salvar no localStorage sempre como cache offline
   useEffect(() => {
@@ -105,7 +130,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
   }, [banks, transactions, categories]);
 
-  // Carregar dados do Supabase de forma segura, com paginação total e sincronização entre múltiplos dispositivos
+  // Carregar dados do Supabase de forma segura, com auto-recuperação de sessão e sincronização
   const refreshFromDatabase = useCallback(async (force = false) => {
     const now = Date.now();
     if (isFetchingRef.current || (!force && (now - lastRefreshTimeRef.current < 2000))) {
@@ -117,21 +142,42 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setIsRefreshing(true);
 
     try {
-      const [banksRes, catRes] = await Promise.all([
+      let [banksRes, catRes] = await Promise.all([
         supabase.from('banks').select('*'),
         supabase.from('categories').select('*'),
       ]);
+
+      // AUTO-RECUPERAÇÃO: se houver sessão expirada/JWT inválido no navegador do computador
+      if (isAuthOrJwtError(banksRes.error || catRes.error)) {
+        console.warn('Sessão expirada detectada. Limpando credenciais locais e reconectando...');
+        clearSupabaseAuthStorage();
+        await supabase.auth.signOut().catch(() => {});
+        // Tentar novamente imediatamente com a chave anônima pública
+        [banksRes, catRes] = await Promise.all([
+          supabase.from('banks').select('*'),
+          supabase.from('categories').select('*'),
+        ]);
+      }
 
       if (
         banksRes.error?.code === 'PGRST205' || 
         catRes.error?.code === 'PGRST205'
       ) {
         setSyncStatus('needs_tables');
+        setSyncErrorMessage('Tabelas ausentes no Supabase. Execute o script SQL no painel.');
         return;
       }
 
       if (banksRes.error || catRes.error) {
+        const err = banksRes.error || catRes.error;
+        let msg = err?.message || 'Falha ao consultar banco de dados.';
+        if (isAuthOrJwtError(err)) {
+          msg = 'Sessão expirada no navegador. Clique para redefinir a conexão.';
+        } else if (isNetworkOrAdblockError(err)) {
+          msg = 'Bloqueador de anúncios (ex: AdBlock, Brave) ou extensão bloqueando o Supabase. Desative para sincronizar.';
+        }
         setSyncStatus('error');
+        setSyncErrorMessage(msg);
         return;
       }
 
@@ -142,19 +188,36 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       let hasError = false;
 
       while (true) {
-        const txRes = await supabase
+        let txRes = await supabase
           .from('transactions')
           .select('*')
           .order('order', { ascending: true })
           .order('created_at', { ascending: true })
           .range(from, from + PAGE_SIZE - 1);
 
+        if (txRes.error && isAuthOrJwtError(txRes.error)) {
+          clearSupabaseAuthStorage();
+          await supabase.auth.signOut().catch(() => {});
+          txRes = await supabase
+            .from('transactions')
+            .select('*')
+            .order('order', { ascending: true })
+            .order('created_at', { ascending: true })
+            .range(from, from + PAGE_SIZE - 1);
+        }
+
         if (txRes.error) {
           if (txRes.error.code === 'PGRST205') {
             setSyncStatus('needs_tables');
+            setSyncErrorMessage('Tabela de transações ausente.');
             return;
           }
           console.warn('Erro ao carregar lote de transações:', txRes.error);
+          let msg = txRes.error.message || 'Erro ao carregar transações.';
+          if (isNetworkOrAdblockError(txRes.error)) {
+            msg = 'Bloqueador de anúncios ou antivírus bloqueando conexões com Supabase.';
+          }
+          setSyncErrorMessage(msg);
           hasError = true;
           break;
         }
@@ -174,6 +237,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       setSyncStatus('connected');
+      setSyncErrorMessage(null);
 
       const dbBanks = (banksRes.data || []).map(mapBankFromDb);
       const dbCategories = (catRes.data || []).map(mapCategoryFromDb);
@@ -191,9 +255,14 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         setTransactions(dbTransactions);
         localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(dbTransactions));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Falha na sincronização com Supabase:', err);
+      let msg = err?.message || 'Falha na conexão com Supabase.';
+      if (isNetworkOrAdblockError(err)) {
+        msg = 'Bloqueador de anúncios (ex: AdBlock, Brave) ou extensão bloqueando o Supabase. Desative para sincronizar.';
+      }
       setSyncStatus('error');
+      setSyncErrorMessage(msg);
     } finally {
       isFetchingRef.current = false;
       setIsRefreshing(false);
@@ -393,25 +462,89 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     });
   };
 
-  const addBank = (newBank: Bank) => {
-    saveHistory();
-    setBanks(prev => [...prev, newBank]);
-    safeDbRun(supabase.from('banks').insert(mapBankToDb(newBank)));
+  const notifyMutationResult = (results: (any | undefined)[]) => {
+    const failed = results.find(r => r?.error);
+    if (failed?.error) {
+      setHasUnsyncedChanges(true);
+      setSyncStatus('error');
+      const err = failed.error;
+      let msg = err.message || 'Erro de conexão com o banco';
+      if (isAuthOrJwtError(err)) {
+        msg = 'Sessão expirada. Clique no ícone de sincronização para reparar.';
+      } else if (isNetworkOrAdblockError(err)) {
+        msg = 'Extensão/Bloqueador de anúncios bloqueando salvamento na nuvem.';
+      }
+      setSyncErrorMessage(msg);
+      showError(`Salvo localmente! Falha na nuvem: ${msg}`);
+    } else {
+      setSyncStatus('connected');
+      setSyncErrorMessage(null);
+    }
   };
 
-  const removeBank = (id: string) => {
+  const repairConnection = async () => {
+    setIsRefreshing(true);
+    try {
+      clearSupabaseAuthStorage();
+      await supabase.auth.signOut().catch(() => {});
+      await refreshFromDatabase(true);
+      showSuccess('Credenciais limpas e conexão restabelecida!');
+    } catch (err: any) {
+      showError('Não foi possível reparar a conexão: ' + (err?.message || 'Erro de rede'));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const pushLocalToDatabase = async () => {
+    setIsRefreshing(true);
+    try {
+      if (banks.length > 0) {
+        await safeDbRun(supabase.from('banks').upsert(banks.map(mapBankToDb)));
+      }
+      if (categories.length > 0) {
+        await safeDbRun(supabase.from('categories').upsert(categories.map(mapCategoryToDb)));
+      }
+      if (transactions.length > 0) {
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
+          const slice = transactions.slice(i, i + BATCH_SIZE);
+          await safeDbRun(supabase.from('transactions').upsert(slice.map(mapTransactionToDb)));
+        }
+      }
+      setHasUnsyncedChanges(false);
+      setSyncStatus('connected');
+      setSyncErrorMessage(null);
+      showSuccess('Todas as alterações locais foram salvas na nuvem com sucesso!');
+    } catch (err: any) {
+      showError('Erro ao enviar dados locais: ' + (err?.message || 'Falha de rede'));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const addBank = async (newBank: Bank) => {
+    saveHistory();
+    setBanks(prev => [...prev, newBank]);
+    const res = await safeDbRun(supabase.from('banks').insert(mapBankToDb(newBank)));
+    notifyMutationResult([res]);
+  };
+
+  const removeBank = async (id: string) => {
     saveHistory();
     setBanks(prev => prev.filter(b => b.id !== id));
     setTransactions(prev => prev.filter(t => t.bankId !== id && t.destinationBankId !== id));
 
-    safeDbRun(supabase.from('banks').delete().eq('id', id));
-    safeDbRun(supabase.from('transactions').delete().or(`bank_id.eq.${id},destination_bank_id.eq.${id}`));
+    const r1 = await safeDbRun(supabase.from('banks').delete().eq('id', id));
+    const r2 = await safeDbRun(supabase.from('transactions').delete().or(`bank_id.eq.${id},destination_bank_id.eq.${id}`));
+    notifyMutationResult([r1, r2]);
   };
 
-  const updateBank = (updatedBank: Bank) => {
+  const updateBank = async (updatedBank: Bank) => {
     saveHistory();
     setBanks(prev => prev.map(b => b.id === updatedBank.id ? updatedBank : b));
-    safeDbRun(supabase.from('banks').upsert(mapBankToDb(updatedBank)));
+    const res = await safeDbRun(supabase.from('banks').upsert(mapBankToDb(updatedBank)));
+    notifyMutationResult([res]);
   };
 
   const addTransaction = (t: Transaction) => {
@@ -455,8 +588,12 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setBanks(updatedBanks);
     setTransactions(prev => [...newTransactions, ...prev]);
 
-    safeDbRun(supabase.from('transactions').insert(newTransactions.map(mapTransactionToDb)));
-    safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+    (async () => {
+      const r1 = await safeDbRun(supabase.from('transactions').insert(newTransactions.map(mapTransactionToDb)));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+      notifyMutationResult([r1, r2]);
+    })();
+
     return newTransactions;
   };
 
@@ -490,8 +627,11 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     const idsToDelete = toDelete.map((t) => t.id);
     setTransactions(prev => prev.filter((t) => !idsToDelete.includes(t.id)));
 
-    safeDbRun(supabase.from('transactions').delete().in('id', idsToDelete));
-    safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+    (async () => {
+      const r1 = await safeDbRun(supabase.from('transactions').delete().in('id', idsToDelete));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+      notifyMutationResult([r1, r2]);
+    })();
   };
 
   const updateTransaction = (
@@ -544,32 +684,38 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       setTransactions(updatedTransactions);
     }
 
-    safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(mapTransactionToDb)));
-    safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+    (async () => {
+      const r1 = await safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(mapTransactionToDb)));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+      notifyMutationResult([r1, r2]);
+    })();
   };
 
-  const addCategory = (cat: Category) => {
+  const addCategory = async (cat: Category) => {
     saveHistory();
     setCategories(prev => [...prev, cat]);
-    safeDbRun(supabase.from('categories').insert(mapCategoryToDb(cat)));
+    const res = await safeDbRun(supabase.from('categories').insert(mapCategoryToDb(cat)));
+    notifyMutationResult([res]);
     showSuccess("Categoria adicionada!");
   };
 
-  const updateCategory = (cat: Category) => {
+  const updateCategory = async (cat: Category) => {
     saveHistory();
     setCategories(prev => prev.map(c => c.id === cat.id ? cat : c));
-    safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(cat)));
+    const res = await safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(cat)));
+    notifyMutationResult([res]);
     showSuccess("Categoria atualizada!");
   };
 
-  const deleteCategory = (id: string) => {
+  const deleteCategory = async (id: string) => {
     if (categories.length <= 1) {
       showError("Você precisa de pelo menos uma categoria.");
       return;
     }
     saveHistory();
     setCategories(prev => prev.filter(c => c.id !== id));
-    safeDbRun(supabase.from('categories').delete().eq('id', id));
+    const res = await safeDbRun(supabase.from('categories').delete().eq('id', id));
+    notifyMutationResult([res]);
     showSuccess("Categoria removida!");
   };
 
@@ -585,7 +731,10 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(updated);
 
     const reorderedItems = updated.filter(t => transactionIds.includes(t.id));
-    safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(mapTransactionToDb)));
+    (async () => {
+      const res = await safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(mapTransactionToDb)));
+      notifyMutationResult([res]);
+    })();
   };
 
   return (
@@ -595,8 +744,12 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         transactions,
         categories,
         syncStatus,
+        syncErrorMessage,
         isRefreshing,
+        hasUnsyncedChanges,
         refreshFromDatabase,
+        repairConnection,
+        pushLocalToDatabase,
         addBank,
         removeBank,
         updateBank,

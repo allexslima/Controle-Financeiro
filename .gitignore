@@ -8,3 +8,4 @@ coverage/
 !.env.example
 metadata.json
 bun.lock*
+public/assets/
