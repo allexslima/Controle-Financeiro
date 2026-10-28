@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import BankCard from "@/components/BankCard";
@@ -19,11 +20,23 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const AccountsPage = () => {
+  const location = useLocation();
   const { banks, transactions, removeBank, updateBank, deleteTransaction, addTransaction, addBank, updateTransaction } = useFinance();
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
   const [editingBank, setEditingBank] = useState<Bank | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Abre automaticamente a conta especificada quando navegado a partir de um lançamento
+  useEffect(() => {
+    const targetBankId = (location.state as any)?.selectedBankId;
+    if (targetBankId && banks.length > 0) {
+      const bank = banks.find((b) => b.id === targetBankId && b.type === "account");
+      if (bank) {
+        setSelectedBank(bank);
+      }
+    }
+  }, [location.state, banks]);
 
   const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
@@ -191,6 +204,7 @@ const AccountsPage = () => {
                 banks={banks} 
                 onEdit={setEditingTransaction} 
                 onDelete={handleDeleteRequest}
+                enableReorder={true}
               />
 
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
