@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState } from 'react';
-import { RefreshCw, AlertCircle, Wrench, UploadCloud, ShieldAlert, CheckCircle2, ExternalLink } from "lucide-react";
+import { RefreshCw, AlertCircle, Wrench, UploadCloud, CheckCircle2, Activity, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useFinance } from "@/context/FinanceContext";
+import { supabase } from "@/lib/supabase";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { showSuccess, showError } from "@/utils/toast";
 import {
@@ -34,6 +35,8 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; ms?: number } | null>(null);
 
   const handleClick = async () => {
     if (isRefreshing) return;
@@ -48,6 +51,45 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
       showSuccess("Dados sincronizados com a nuvem!");
     } catch {
       showError("Não foi possível sincronizar no momento.");
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    const start = performance.now();
+    try {
+      const { data, count, error } = await supabase
+        .from('banks')
+        .select('id, name', { count: 'exact' })
+        .limit(1);
+
+      const elapsed = Math.round(performance.now() - start);
+
+      if (error) {
+        setTestResult({
+          success: false,
+          message: `Erro da nuvem [${error.code || 'API'}]: ${error.message || 'Sem resposta'}`,
+          ms: elapsed,
+        });
+      } else {
+        setTestResult({
+          success: true,
+          message: `Conexão ativa e respondendo! Banco alcançado em ${elapsed}ms.`,
+          ms: elapsed,
+        });
+        // Tenta sincronizar os dados reais se a conexão respondeu
+        await refreshFromDatabase(true);
+      }
+    } catch (err: any) {
+      const elapsed = Math.round(performance.now() - start);
+      setTestResult({
+        success: false,
+        message: `Falha de rede direta: ${err?.message || 'Não foi possível conectar ao Supabase'}`,
+        ms: elapsed,
+      });
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -79,7 +121,7 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
     if (isRefreshing) return "Sincronizando com a nuvem...";
     if (syncStatus === 'connected') return "Nuvem conectada (Clique para sincronizar agora)";
     if (syncStatus === 'needs_tables') return "Tabelas do Supabase ausentes (Clique para detalhes)";
-    if (syncStatus === 'error') return "Falha na conexão com Supabase (Clique para diagnosticar e reparar)";
+    if (syncStatus === 'error') return "Falha na sincronização (Clique para diagnosticar e testar conexão)";
     return "Conectando ao Supabase...";
   };
 
@@ -137,77 +179,92 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md p-6 rounded-2xl">
           <DialogHeader className="space-y-2">
-            <div className="flex items-center gap-2.5 text-rose-600 dark:text-rose-400">
-              <div className="p-2 bg-rose-100 dark:bg-rose-950/60 rounded-xl">
-                <AlertCircle size={22} />
+            <div className="flex items-center gap-2.5 text-slate-900 dark:text-white">
+              <div className={cn(
+                "p-2 rounded-xl",
+                syncStatus === 'error' ? "bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+              )}>
+                {syncStatus === 'error' ? <AlertCircle size={22} /> : <CheckCircle2 size={22} />}
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
-                  Diagnóstico de Conexão com a Nuvem
+                <DialogTitle className="text-lg font-bold">
+                  Sincronização com o Banco de Dados
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-                  O computador não conseguiu comunicar com o banco de dados Supabase.
+                  Status de comunicação com o Supabase na nuvem.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
-            {/* Mensagem detalhada do erro */}
-            <div className="p-3.5 bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl text-xs space-y-1">
-              <p className="font-bold text-rose-800 dark:text-rose-300">
-                Motivo detectado:
-              </p>
-              <p className="text-rose-700 dark:text-rose-400 font-mono text-[11px] break-words">
-                {syncErrorMessage || "Erro de rede ou permissão ao acessar o Supabase."}
-              </p>
-            </div>
+            {/* Mensagem detalhada do erro (se houver) */}
+            {syncStatus === 'error' && (
+              <div className="p-3.5 bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl text-xs space-y-1">
+                <p className="font-bold text-rose-800 dark:text-rose-300">
+                  Detalhes do erro detectado:
+                </p>
+                <p className="text-rose-700 dark:text-rose-400 font-mono text-[11px] break-words">
+                  {syncErrorMessage || "Falha na comunicação com o banco de dados."}
+                </p>
+              </div>
+            )}
 
             {/* Aviso sobre alterações pendentes */}
             {hasUnsyncedChanges && (
               <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl text-xs space-y-1">
                 <p className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                  <span>⚠️</span> Alterações pendentes neste computador
+                  <span>⚠️</span> Alterações pendentes neste dispositivo
                 </p>
                 <p className="text-amber-700 dark:text-amber-400 text-[11px]">
-                  Você fez modificações que ainda não foram salvas na nuvem. Clique em "Enviar Alterações Locais" para não perdê-las.
+                  Há lançamentos ou alterações armazenadas localmente no navegador. Clique em "Enviar Alterações Locais" para salvar tudo na nuvem.
                 </p>
               </div>
             )}
 
-            {/* Guia de soluções rápidas */}
-            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
-              <p className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <ShieldAlert size={15} className="text-indigo-500" />
-                Principais causas no computador:
-              </p>
-              <ul className="list-disc pl-4 space-y-1.5 text-[11px] leading-relaxed">
-                <li>
-                  <strong className="text-slate-700 dark:text-slate-300">Bloqueador de anúncios (AdBlock / uBlock / Brave):</strong> Navegadores no computador costumam bloquear requisições para o domínio <code>supabase.co</code>. Desative o bloqueador para este site.
-                </li>
-                <li>
-                  <strong className="text-slate-700 dark:text-slate-300">Sessão antiga ou expirada:</strong> O navegador pode estar com um token antigo armazenado no cache. O botão "Reparar Conexão" abaixo resolve isso na hora.
-                </li>
-              </ul>
-            </div>
+            {/* Resultado do Teste de Conexão */}
+            {testResult && (
+              <div className={cn(
+                "p-3 rounded-xl border text-xs space-y-1",
+                testResult.success 
+                  ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300"
+                  : "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/40 text-rose-800 dark:text-rose-300"
+              )}>
+                <div className="flex items-center gap-1.5 font-bold">
+                  {testResult.success ? <CheckCircle2 size={14} className="text-emerald-600" /> : <AlertCircle size={14} className="text-rose-600" />}
+                  <span>{testResult.success ? "Conexão Testada com Sucesso" : "Falha no Teste de Conexão"}</span>
+                </div>
+                <p className="text-[11px] font-mono break-words">{testResult.message}</p>
+              </div>
+            )}
 
-            {/* Ações de Reparo */}
+            {/* Ações */}
             <div className="space-y-2 pt-1">
               <Button
-                onClick={handleRepair}
-                disabled={isRepairing || isPushing}
-                className="w-full justify-center gap-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs py-5"
+                onClick={handleTestConnection}
+                disabled={isTesting || isRefreshing}
+                variant="outline"
+                className="w-full justify-center gap-2 rounded-xl text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-900 font-semibold text-xs py-4.5 cursor-pointer"
               >
-                <Wrench size={16} className={isRepairing ? "animate-spin" : ""} />
-                {isRepairing ? "Reparando conexão..." : "Reparar Conexão e Reconectar"}
+                <Wifi size={15} className={isTesting ? "animate-pulse text-primary" : "text-primary"} />
+                {isTesting ? "Testando comunicação com Supabase..." : "Testar Conexão em Tempo Real"}
+              </Button>
+
+              <Button
+                onClick={handleRepair}
+                disabled={isRepairing || isPushing || isRefreshing}
+                className="w-full justify-center gap-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs py-5 cursor-pointer"
+              >
+                <RefreshCw size={15} className={isRepairing || isRefreshing ? "animate-spin" : ""} />
+                {isRepairing || isRefreshing ? "Sincronizando..." : "Sincronizar Dados da Nuvem Agora"}
               </Button>
 
               {hasUnsyncedChanges && (
                 <Button
                   onClick={handlePush}
-                  disabled={isRepairing || isPushing}
+                  disabled={isRepairing || isPushing || isRefreshing}
                   variant="outline"
-                  className="w-full justify-center gap-2 rounded-xl border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-bold text-xs py-5"
+                  className="w-full justify-center gap-2 rounded-xl border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-bold text-xs py-5 cursor-pointer"
                 >
                   <UploadCloud size={16} className={isPushing ? "animate-spin" : ""} />
                   {isPushing ? "Enviando alterações..." : "Enviar Alterações Locais para a Nuvem"}
@@ -217,7 +274,7 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
               <Button
                 onClick={() => setDialogOpen(false)}
                 variant="ghost"
-                className="w-full rounded-xl text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                className="w-full rounded-xl text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
               >
                 Fechar
               </Button>
