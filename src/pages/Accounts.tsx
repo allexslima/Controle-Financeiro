@@ -207,6 +207,19 @@ const AccountsPage = () => {
                 enableReorder={true}
               />
 
+              {/* Botão de Nova Transação na parte inferior da lista */}
+              <div className="flex items-center justify-between px-2 -mt-2">
+                <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">
+                  {filteredTransactions.length} {filteredTransactions.length === 1 ? 'lançamento no mês' : 'lançamentos no mês'}
+                </span>
+                <AddTransactionDialog 
+                  banks={banks} 
+                  onAdd={addTransaction} 
+                  variant="small" 
+                  defaultBankId={selectedBank.id} 
+                />
+              </div>
+
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
                 <div className="flex justify-between text-sm font-medium text-slate-500">
                   <span>Valores Efetuados (Mês)</span>
@@ -226,11 +239,19 @@ const AccountsPage = () => {
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.previousBalance || 0)}
                   </span>
                 </div>
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                   <span className="text-lg font-black text-slate-900 dark:text-white">Total Geral</span>
-                  <span className={`text-2xl font-black ${(selectedSummary?.projectedTotal || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.projectedTotal || 0)}
-                  </span>
+                  <div className="flex items-center justify-between sm:justify-end gap-4">
+                    <span className={`text-2xl font-black ${(selectedSummary?.projectedTotal || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedSummary?.projectedTotal || 0)}
+                    </span>
+                    <AddTransactionDialog 
+                      banks={banks} 
+                      onAdd={addTransaction} 
+                      variant="small" 
+                      defaultBankId={selectedBank.id} 
+                    />
+                  </div>
                 </div>
               </div>
             </div>

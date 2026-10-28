@@ -35,15 +35,25 @@ import CategorySelector from "./CategorySelector";
 interface AddTransactionDialogProps {
   banks: Bank[];
   onAdd: (transaction: Transaction) => void;
-  variant?: 'default' | 'discrete';
+  variant?: 'default' | 'discrete' | 'small';
+  className?: string;
+  buttonText?: string;
+  defaultBankId?: string;
 }
 
-const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransactionDialogProps) => {
+const AddTransactionDialog = ({ 
+  banks, 
+  onAdd, 
+  variant = 'default',
+  className,
+  buttonText,
+  defaultBankId 
+}: AddTransactionDialogProps) => {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<TransactionMethod>("debit");
-  const [bankId, setBankId] = useState("");
+  const [bankId, setBankId] = useState(defaultBankId || "");
   const [destinationBankId, setDestinationBankId] = useState("");
   const [categoryId, setCategoryId] = useState("cat-7");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -55,6 +65,16 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   const today = startOfDay(new Date());
+
+  useEffect(() => {
+    if (defaultBankId) {
+      setBankId(defaultBankId);
+      const defBank = banks.find(b => b.id === defaultBankId);
+      if (defBank?.type === 'credit_card') {
+        setMethod("credit");
+      }
+    }
+  }, [defaultBankId, banks]);
 
   const filteredBanks = banks.filter(bank => {
       if (method === 'credit') return bank.type === 'credit_card';
@@ -137,10 +157,15 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
   const resetForm = () => {
     setDescription("");
     setAmount("");
-    setBankId("");
+    setBankId(defaultBankId || "");
     setDestinationBankId("");
     setCategoryId("cat-7");
-    setMethod("debit");
+    const defBank = banks.find(b => b.id === defaultBankId);
+    if (defBank?.type === 'credit_card') {
+      setMethod("credit");
+    } else {
+      setMethod("debit");
+    }
     setDate(format(new Date(), "yyyy-MM-dd"));
     setInstallments("1");
     setInstallmentValueType('total');
@@ -153,11 +178,22 @@ const AddTransactionDialog = ({ banks, onAdd, variant = 'default' }: AddTransact
     <Dialog open={open} onOpenChange={(val) => { setOpen(val); if(!val) resetForm(); }}>
       <DialogTrigger asChild>
         {variant === 'default' ? (
-          <Button className="rounded-full px-8 py-6 text-base font-bold bg-[#1e293b] hover:bg-[#0f172a] text-white shadow-xl transition-all hover:scale-105">
-            Nova Transação
+          <Button className={cn("rounded-full px-8 py-6 text-base font-bold bg-[#1e293b] hover:bg-[#0f172a] text-white shadow-xl transition-all hover:scale-105 cursor-pointer", className)}>
+            {buttonText || "Nova Transação"}
+          </Button>
+        ) : variant === 'small' ? (
+          <Button 
+            size="sm" 
+            className={cn(
+              "rounded-xl px-3.5 py-2 text-xs font-bold gap-1.5 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 shadow-sm transition-all hover:scale-105 cursor-pointer shrink-0",
+              className
+            )}
+          >
+            <Plus size={14} className="stroke-[2.5]" />
+            <span>{buttonText || "Nova Transação"}</span>
           </Button>
         ) : (
-          <Button className="h-16 w-16 rounded-full shadow-2xl shadow-black/20 dark:shadow-white/10 flex items-center justify-center p-0 bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:scale-110 transition-transform">
+          <Button className={cn("h-16 w-16 rounded-full shadow-2xl shadow-black/20 dark:shadow-white/10 flex items-center justify-center p-0 bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:scale-110 transition-transform cursor-pointer", className)}>
             <Plus className="h-10 w-10" />
           </Button>
         )}
