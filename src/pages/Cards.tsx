@@ -293,22 +293,14 @@ const CardsPage = () => {
                     }).format(summaryData.previous)}
                   </span>
                 </div>
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
                   <span className="text-lg font-black text-slate-900 dark:text-white">Total Geral</span>
-                  <div className="flex items-center justify-between sm:justify-end gap-4">
-                    <span className={`text-2xl font-black ${grandTotal >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      }).format(grandTotal)}
-                    </span>
-                    <AddTransactionDialog 
-                      banks={banks} 
-                      onAdd={addTransaction} 
-                      variant="small" 
-                      defaultBankId={selectedCard.id} 
-                    />
-                  </div>
+                  <span className={`text-2xl font-black ${grandTotal >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(grandTotal)}
+                  </span>
                 </div>
               </div>
             </div>
