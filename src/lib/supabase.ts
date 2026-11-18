@@ -119,9 +119,10 @@ export const mapBankFromDb = (row: any): Bank => ({
   yieldType: row.yield_type ?? undefined,
   yieldRate: row.yield_rate !== null && row.yield_rate !== undefined ? Number(row.yield_rate) : undefined,
   yieldAmount: row.yield_amount !== null && row.yield_amount !== undefined ? Number(row.yield_amount) : undefined,
+  userId: row.user_id ?? undefined,
 });
 
-export const mapBankToDb = (bank: Bank) => ({
+export const mapBankToDb = (bank: Bank, userId?: string) => ({
   id: bank.id,
   name: bank.name || 'Conta',
   balance: Number.isFinite(Number(bank.balance)) ? Number(bank.balance) : 0,
@@ -133,6 +134,7 @@ export const mapBankToDb = (bank: Bank) => ({
   yield_type: bank.yieldType ?? null,
   yield_rate: bank.yieldRate !== undefined && bank.yieldRate !== null && !isNaN(Number(bank.yieldRate)) ? Number(bank.yieldRate) : null,
   yield_amount: bank.yieldAmount !== undefined && bank.yieldAmount !== null && !isNaN(Number(bank.yieldAmount)) ? Number(bank.yieldAmount) : null,
+  ...(userId || bank.userId ? { user_id: userId || bank.userId } : {}),
 });
 
 export const mapCategoryFromDb = (row: any): Category => ({
@@ -140,13 +142,15 @@ export const mapCategoryFromDb = (row: any): Category => ({
   name: row.name,
   color: row.color,
   icon: row.icon ?? undefined,
+  userId: row.user_id ?? undefined,
 });
 
-export const mapCategoryToDb = (category: Category) => ({
+export const mapCategoryToDb = (category: Category, userId?: string) => ({
   id: category.id,
   name: category.name || 'Geral',
   color: category.color || '#94a3b8',
   icon: category.icon ?? null,
+  ...(userId || category.userId ? { user_id: userId || category.userId } : {}),
 });
 
 export const mapTransactionFromDb = (row: any): Transaction => ({
@@ -163,9 +167,10 @@ export const mapTransactionFromDb = (row: any): Transaction => ({
   groupId: row.group_id ?? undefined,
   isCompleted: row.is_completed ?? true,
   order: Number(row.order) || 0,
+  userId: row.user_id ?? undefined,
 });
 
-export const mapTransactionToDb = (t: Transaction) => ({
+export const mapTransactionToDb = (t: Transaction, userId?: string) => ({
   id: t.id,
   description: t.description || 'Lançamento',
   amount: Number.isFinite(Number(t.amount)) ? Number(t.amount) : 0,
@@ -179,4 +184,5 @@ export const mapTransactionToDb = (t: Transaction) => ({
   group_id: t.groupId ?? null,
   is_completed: t.isCompleted ?? true,
   order: Number.isFinite(Number(t.order)) ? Number(t.order) : 0,
+  ...(userId || t.userId ? { user_id: userId || t.userId } : {}),
 });

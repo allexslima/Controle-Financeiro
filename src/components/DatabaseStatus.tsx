@@ -5,9 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { showSuccess } from '@/utils/toast';
 
-const SQL_SCHEMA = `-- 1. Tabela de Bancos e Contas
+const SQL_SCHEMA = `-- 1. Tabela de Bancos e Contas (isolada por usuário)
 CREATE TABLE IF NOT EXISTS banks (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
   name TEXT NOT NULL,
   balance NUMERIC NOT NULL DEFAULT 0,
   color TEXT NOT NULL,
@@ -18,21 +19,25 @@ CREATE TABLE IF NOT EXISTS banks (
   yield_type TEXT,
   yield_rate NUMERIC,
   yield_amount NUMERIC,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, id)
 );
 
--- 2. Tabela de Categorias
+-- 2. Tabela de Categorias (isolada por usuário)
 CREATE TABLE IF NOT EXISTS categories (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
   name TEXT NOT NULL,
   color TEXT NOT NULL,
   icon TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, id)
 );
 
--- 3. Tabela de Transações
+-- 3. Tabela de Transações (isolada por usuário)
 CREATE TABLE IF NOT EXISTS transactions (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
   description TEXT NOT NULL,
   amount NUMERIC NOT NULL,
   method TEXT NOT NULL,
@@ -45,17 +50,41 @@ CREATE TABLE IF NOT EXISTS transactions (
   group_id TEXT,
   is_completed BOOLEAN DEFAULT TRUE,
   "order" INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, id)
 );
 
--- Habilitar leitura e escrita pública
+-- Índices para performance por usuário
+CREATE INDEX IF NOT EXISTS idx_banks_user_id ON banks(user_id);
+CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+
+-- Habilitar RLS estrito: cada usuário autenticado acessa somente seus próprios registros
 ALTER TABLE banks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Acesso total a banks" ON banks FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso total a categories" ON categories FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso total a transactions" ON transactions FOR ALL USING (true) WITH CHECK (true);`;
+DROP POLICY IF EXISTS "Acesso total a banks" ON banks;
+DROP POLICY IF EXISTS "Acesso total a categories" ON categories;
+DROP POLICY IF EXISTS "Acesso total a transactions" ON transactions;
+DROP POLICY IF EXISTS "banks_user_isolation" ON banks;
+DROP POLICY IF EXISTS "categories_user_isolation" ON categories;
+DROP POLICY IF EXISTS "transactions_user_isolation" ON transactions;
+
+CREATE POLICY "banks_user_isolation" ON banks
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "categories_user_isolation" ON categories
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "transactions_user_isolation" ON transactions
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);`;
 
 export const DatabaseStatus = () => {
   const { syncStatus, refreshFromDatabase } = useFinance();

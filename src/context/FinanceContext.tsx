@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Bank, Transaction, Category } from "@/types/finance";
 import { showSuccess, showError } from "@/utils/toast";
 import { addMonths, parseISO, isAfter, isSameDay } from "date-fns";
+import { useAuth } from "@/context/AuthContext";
 import { 
   supabase, 
   safeDbRun,
@@ -52,9 +53,19 @@ interface FinanceContextType {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-const BANKS_STORAGE_KEY = "finance_io_banks";
-const TRANSACTIONS_STORAGE_KEY = "finance_io_transactions";
-const CATEGORIES_STORAGE_KEY = "finance_io_categories";
+const LEGACY_STORAGE_KEYS = [
+  "finance_io_banks",
+  "finance_io_transactions",
+  "finance_io_categories",
+  "finance_io_has_unsynced",
+];
+
+const getUserStorageKeys = (uid: string) => ({
+  banks: `finance_io_banks_${uid}`,
+  transactions: `finance_io_transactions_${uid}`,
+  categories: `finance_io_categories_${uid}`,
+  unsynced: `finance_io_has_unsynced_${uid}`,
+});
 
 const DEFAULT_CATEGORIES: Category[] = [
   { id: "cat-1", name: "Alimentação", color: "#ef4444" },
@@ -68,68 +79,99 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: "cat-inv-redeem", name: "Resgate", color: "#f59e0b" },
 ];
 
-const DEFAULT_BANKS: Bank[] = [
-  { id: "1", name: "Nubank", balance: 0, color: "#8a05be", type: "account" },
-  { id: "2", name: "Itaú", balance: 0, color: "#ec7000", type: "account" },
-  { id: "3", name: "XP Visa", balance: 0, color: "#000000", type: "credit_card", closingDay: 15, dueDay: 22 },
-];
-
 export const FinanceProvider = ({ children }: { children: React.ReactNode }) => {
-  const [banks, setBanks] = useState<Bank[]>(() => {
-    const saved = localStorage.getItem(BANKS_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : DEFAULT_BANKS;
-  });
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return parsed.map((t: Transaction, index: number) => ({
-        ...t,
-        order: t.order !== undefined ? t.order : index
-      }));
-    }
-    return [];
-  });
-
-  const [categories, setCategories] = useState<Category[]>(() => {
-    const saved = localStorage.getItem(CATEGORIES_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
-  });
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
 
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('connecting');
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('finance_io_has_unsynced') === 'true';
-    }
-    return false;
-  });
+  const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
+
   const isFetchingRef = React.useRef(false);
   const lastRefreshTimeRef = React.useRef(0);
 
-  // Persistir flag de alterações locais não sincronizadas
+  // Carregar dados isolados do localStorage apenas do usuário autenticado e limpar estado ao sair
   useEffect(() => {
+    if (!userId) {
+      setLoadedUserId(null);
+      setBanks([]);
+      setTransactions([]);
+      setCategories(DEFAULT_CATEGORIES);
+      setHistory([]);
+      setHasUnsyncedChanges(false);
+      setSyncStatus('connecting');
+      setSyncErrorMessage(null);
+      isFetchingRef.current = false;
+      lastRefreshTimeRef.current = 0;
+      return;
+    }
+
+    // Remover chaves antigas globais (sem user_id) para evitar vazamento entre contas no mesmo navegador
     if (typeof window !== 'undefined') {
-      if (hasUnsyncedChanges) {
-        localStorage.setItem('finance_io_has_unsynced', 'true');
+      LEGACY_STORAGE_KEYS.forEach((legacyKey) => {
+        localStorage.removeItem(legacyKey);
+      });
+
+      const keys = getUserStorageKeys(userId);
+      const savedBanks = localStorage.getItem(keys.banks);
+      const savedTxs = localStorage.getItem(keys.transactions);
+      const savedCats = localStorage.getItem(keys.categories);
+      const savedUnsynced = localStorage.getItem(keys.unsynced) === 'true';
+
+      setBanks(savedBanks ? JSON.parse(savedBanks) : []);
+      if (savedTxs) {
+        const parsed = JSON.parse(savedTxs);
+        setTransactions(
+          parsed.map((t: Transaction, index: number) => ({
+            ...t,
+            order: t.order !== undefined ? t.order : index,
+          }))
+        );
       } else {
-        localStorage.removeItem('finance_io_has_unsynced');
+        setTransactions([]);
+      }
+      setCategories(savedCats ? JSON.parse(savedCats) : DEFAULT_CATEGORIES);
+      setHasUnsyncedChanges(savedUnsynced);
+    }
+
+    setHistory([]);
+    lastRefreshTimeRef.current = 0;
+    setLoadedUserId(userId);
+  }, [userId]);
+
+  // Persistir flag de alterações locais não sincronizadas apenas para o usuário carregado
+  useEffect(() => {
+    if (typeof window !== 'undefined' && userId && loadedUserId === userId) {
+      const keys = getUserStorageKeys(userId);
+      if (hasUnsyncedChanges) {
+        localStorage.setItem(keys.unsynced, 'true');
+      } else {
+        localStorage.removeItem(keys.unsynced);
       }
     }
-  }, [hasUnsyncedChanges]);
+  }, [hasUnsyncedChanges, userId, loadedUserId]);
 
-  // Salvar no localStorage sempre como cache offline
+  // Salvar no localStorage isolado por usuário apenas quando o estado pertencer ao usuário atual
   useEffect(() => {
-    localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(banks));
-    localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
-    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
-  }, [banks, transactions, categories]);
+    if (typeof window !== 'undefined' && userId && loadedUserId === userId) {
+      const keys = getUserStorageKeys(userId);
+      localStorage.setItem(keys.banks, JSON.stringify(banks));
+      localStorage.setItem(keys.transactions, JSON.stringify(transactions));
+      localStorage.setItem(keys.categories, JSON.stringify(categories));
+    }
+  }, [banks, transactions, categories, userId, loadedUserId]);
 
-  // Carregar dados do Supabase de forma segura e sincronizar
+  // Carregar dados do Supabase filtrados estritamente pelo user_id autenticado
   const refreshFromDatabase = useCallback(async (force = false) => {
+    if (!userId) return;
+
     const now = Date.now();
     if (isFetchingRef.current || (!force && (now - lastRefreshTimeRef.current < 2000))) {
       return;
@@ -141,8 +183,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
     try {
       const [banksRes, catRes] = await Promise.all([
-        supabase.from('banks').select('*'),
-        supabase.from('categories').select('*'),
+        supabase.from('banks').select('*').eq('user_id', userId),
+        supabase.from('categories').select('*').eq('user_id', userId),
       ]);
 
       if (
@@ -162,19 +204,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         return;
       }
 
-      const dbBanks = (banksRes.data || []).map(mapBankFromDb);
-      const dbCategories = (catRes.data || []).map(mapCategoryFromDb);
-
-      if (dbBanks.length > 0) {
-        setBanks(dbBanks);
-        localStorage.setItem(BANKS_STORAGE_KEY, JSON.stringify(dbBanks));
-      }
-      if (dbCategories.length > 0) {
-        setCategories(dbCategories);
-        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(dbCategories));
-      }
-
-      // Buscar TODAS as transações em páginas para não cortar além do limite de 1000
+      // Buscar TODAS as transações do usuário em páginas para não cortar além do limite de 1000
       let allTxRows: any[] = [];
       let from = 0;
       const PAGE_SIZE = 1000;
@@ -184,6 +214,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const txRes = await supabase
           .from('transactions')
           .select('*')
+          .eq('user_id', userId)
           .order('order', { ascending: true })
           .order('created_at', { ascending: true })
           .range(from, from + PAGE_SIZE - 1);
@@ -214,11 +245,29 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         return;
       }
 
+      const dbBanks = (banksRes.data || []).map(mapBankFromDb);
+      const dbCategories = (catRes.data || []).map(mapCategoryFromDb);
       const dbTransactions = allTxRows.map(mapTransactionFromDb);
-      if (dbTransactions.length > 0) {
-        setTransactions(dbTransactions);
-        localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(dbTransactions));
+
+      const keys = getUserStorageKeys(userId);
+
+      // Sempre aplicar o estado exato da nuvem para este usuário (inclusive listas vazias para novos usuários)
+      setBanks(dbBanks);
+      localStorage.setItem(keys.banks, JSON.stringify(dbBanks));
+
+      if (dbCategories.length > 0) {
+        setCategories(dbCategories);
+        localStorage.setItem(keys.categories, JSON.stringify(dbCategories));
+      } else {
+        // Novo usuário: inicializar categorias padrão vinculadas ao seu user_id
+        const seededCats = DEFAULT_CATEGORIES.map(c => ({ ...c, userId }));
+        setCategories(seededCats);
+        localStorage.setItem(keys.categories, JSON.stringify(seededCats));
+        await safeDbRun(supabase.from('categories').upsert(seededCats.map(c => mapCategoryToDb(c, userId))));
       }
+
+      setTransactions(dbTransactions);
+      localStorage.setItem(keys.transactions, JSON.stringify(dbTransactions));
 
       setSyncStatus('connected');
       setSyncErrorMessage(null);
@@ -232,11 +281,13 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       isFetchingRef.current = false;
       setIsRefreshing(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    // Sincronização inicial
-    refreshFromDatabase();
+    if (!userId) return;
+
+    // Sincronização inicial para o usuário autenticado
+    refreshFromDatabase(true);
 
     // 1. Ouvir retorno ao aplicativo (quando o usuário volta ao computador ou troca de aba)
     const handleFocusOrVisible = () => {
@@ -248,14 +299,13 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     document.addEventListener('visibilitychange', handleFocusOrVisible);
 
     // 2. Polling periódico de background (a cada 20 segundos enquanto a aba estiver visível)
-    // Mantém o computador atualizado automaticamente mesmo se o Realtime WebSocket estiver bloqueado
     const pollInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         refreshFromDatabase(false);
       }
     }, 20000);
 
-    // 3. Supabase Realtime channel
+    // 3. Supabase Realtime channel filtrado por usuário
     let debounceTimer: any = null;
     const triggerDebouncedRefresh = () => {
       clearTimeout(debounceTimer);
@@ -265,20 +315,20 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     };
 
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel(`schema-db-changes-${userId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'banks' },
+        { event: '*', schema: 'public', table: 'banks', filter: `user_id=eq.${userId}` },
         triggerDebouncedRefresh
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions' },
+        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
         triggerDebouncedRefresh
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'categories' },
+        { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${userId}` },
         triggerDebouncedRefresh
       )
       .subscribe();
@@ -290,7 +340,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
-  }, [refreshFromDatabase]);
+  }, [userId, refreshFromDatabase]);
 
   const saveHistory = () => {
     setHistory(prev => [
@@ -304,7 +354,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const undo = () => {
-    if (history.length === 0) return;
+    if (history.length === 0 || !userId) return;
     const lastState = history[history.length - 1];
 
     // Identificar itens criados após o último estado para removê-los no Supabase
@@ -323,17 +373,21 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setHistory(prev => prev.slice(0, -1));
 
     if (txIdsToDelete.length > 0) {
-      safeDbRun(supabase.from('transactions').delete().in('id', txIdsToDelete));
+      safeDbRun(supabase.from('transactions').delete().eq('user_id', userId).in('id', txIdsToDelete));
     }
     if (bankIdsToDelete.length > 0) {
-      safeDbRun(supabase.from('banks').delete().in('id', bankIdsToDelete));
+      safeDbRun(supabase.from('banks').delete().eq('user_id', userId).in('id', bankIdsToDelete));
     }
     if (catIdsToDelete.length > 0) {
-      safeDbRun(supabase.from('categories').delete().in('id', catIdsToDelete));
+      safeDbRun(supabase.from('categories').delete().eq('user_id', userId).in('id', catIdsToDelete));
     }
 
-    safeDbRun(supabase.from('banks').upsert(lastState.banks.map(mapBankToDb)));
-    safeDbRun(supabase.from('categories').upsert(lastState.categories.map(mapCategoryToDb)));
+    if (lastState.banks.length > 0) {
+      safeDbRun(supabase.from('banks').upsert(lastState.banks.map(b => mapBankToDb(b, userId))));
+    }
+    if (lastState.categories.length > 0) {
+      safeDbRun(supabase.from('categories').upsert(lastState.categories.map(c => mapCategoryToDb(c, userId))));
+    }
 
     // Restaurar apenas transações alteradas ou que foram deletadas, evitando payloads gigantes
     const currentTxMap = new Map(transactions.map(t => [t.id, t]));
@@ -343,29 +397,34 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       return current.amount !== t.amount || current.description !== t.description || current.bankId !== t.bankId || current.date !== t.date || current.category !== t.category;
     });
     if (changedOrRestoredTxs.length > 0) {
-      safeDbRun(supabase.from('transactions').upsert(changedOrRestoredTxs.map(mapTransactionToDb)));
+      safeDbRun(supabase.from('transactions').upsert(changedOrRestoredTxs.map(t => mapTransactionToDb(t, userId))));
     }
 
     showSuccess("Ação desfeita!");
   };
 
   const importFullData = async (data: HistoryState) => {
+    if (!userId) return;
     saveHistory();
     if (data.banks) {
       setBanks(data.banks);
-      safeDbRun(supabase.from('banks').upsert(data.banks.map(mapBankToDb)));
+      if (data.banks.length > 0) {
+        safeDbRun(supabase.from('banks').upsert(data.banks.map(b => mapBankToDb(b, userId))));
+      }
     }
     if (data.transactions) {
       setTransactions(data.transactions);
       const BATCH_SIZE = 100;
       for (let i = 0; i < data.transactions.length; i += BATCH_SIZE) {
         const slice = data.transactions.slice(i, i + BATCH_SIZE);
-        await safeDbRun(supabase.from('transactions').upsert(slice.map(mapTransactionToDb)));
+        await safeDbRun(supabase.from('transactions').upsert(slice.map(t => mapTransactionToDb(t, userId))));
       }
     }
     if (data.categories) {
       setCategories(data.categories);
-      safeDbRun(supabase.from('categories').upsert(data.categories.map(mapCategoryToDb)));
+      if (data.categories.length > 0) {
+        safeDbRun(supabase.from('categories').upsert(data.categories.map(c => mapCategoryToDb(c, userId))));
+      }
     }
   };
 
@@ -472,21 +531,22 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const pushLocalToDatabase = async () => {
+    if (!userId) return;
     setIsRefreshing(true);
     try {
       if (banks.length > 0) {
-        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(mapBankToDb)));
+        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(b => mapBankToDb(b, userId))));
         if (res?.error) throw res.error;
       }
       if (categories.length > 0) {
-        const res = await safeDbRun(supabase.from('categories').upsert(categories.map(mapCategoryToDb)));
+        const res = await safeDbRun(supabase.from('categories').upsert(categories.map(c => mapCategoryToDb(c, userId))));
         if (res?.error) throw res.error;
       }
       if (transactions.length > 0) {
         const BATCH_SIZE = 100;
         for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
           const slice = transactions.slice(i, i + BATCH_SIZE);
-          const res = await safeDbRun(supabase.from('transactions').upsert(slice.map(mapTransactionToDb)));
+          const res = await safeDbRun(supabase.from('transactions').upsert(slice.map(t => mapTransactionToDb(t, userId))));
           if (res?.error) throw res.error;
         }
       }
@@ -504,30 +564,36 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const addBank = async (newBank: Bank) => {
+    if (!userId) return;
     saveHistory();
-    setBanks(prev => [...prev, newBank]);
-    const res = await safeDbRun(supabase.from('banks').insert(mapBankToDb(newBank)));
+    const bankWithUser = { ...newBank, userId };
+    setBanks(prev => [...prev, bankWithUser]);
+    const res = await safeDbRun(supabase.from('banks').insert(mapBankToDb(bankWithUser, userId)));
     notifyMutationResult([res]);
   };
 
   const removeBank = async (id: string) => {
+    if (!userId) return;
     saveHistory();
     setBanks(prev => prev.filter(b => b.id !== id));
     setTransactions(prev => prev.filter(t => t.bankId !== id && t.destinationBankId !== id));
 
-    const r1 = await safeDbRun(supabase.from('banks').delete().eq('id', id));
-    const r2 = await safeDbRun(supabase.from('transactions').delete().or(`bank_id.eq.${id},destination_bank_id.eq.${id}`));
+    const r1 = await safeDbRun(supabase.from('banks').delete().eq('user_id', userId).eq('id', id));
+    const r2 = await safeDbRun(supabase.from('transactions').delete().eq('user_id', userId).or(`bank_id.eq.${id},destination_bank_id.eq.${id}`));
     notifyMutationResult([r1, r2]);
   };
 
   const updateBank = async (updatedBank: Bank) => {
+    if (!userId) return;
     saveHistory();
-    setBanks(prev => prev.map(b => b.id === updatedBank.id ? updatedBank : b));
-    const res = await safeDbRun(supabase.from('banks').upsert(mapBankToDb(updatedBank)));
+    const bankWithUser = { ...updatedBank, userId };
+    setBanks(prev => prev.map(b => b.id === updatedBank.id ? bankWithUser : b));
+    const res = await safeDbRun(supabase.from('banks').upsert(mapBankToDb(bankWithUser, userId)));
     notifyMutationResult([res]);
   };
 
   const addTransaction = (t: Transaction) => {
+    if (!userId) return [];
     saveHistory();
     const newTransactions: Transaction[] = [];
     const count = t.installments || (t.isRecurring ? 12 : 1);
@@ -555,6 +621,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
             : t.description,
         date: installmentDate.toISOString(),
         order: order,
+        userId,
       };
       newTransactions.push(installmentTransaction);
       updatedBanks = applyTransactionToBalance(
@@ -569,8 +636,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(prev => [...newTransactions, ...prev]);
 
     (async () => {
-      const r1 = await safeDbRun(supabase.from('transactions').upsert(newTransactions.map(mapTransactionToDb)));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+      const r1 = await safeDbRun(supabase.from('transactions').upsert(newTransactions.map(tx => mapTransactionToDb(tx, userId))));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId))));
       notifyMutationResult([r1, r2]);
     })();
 
@@ -581,6 +648,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     id: string,
     mode: "single" | "future" | "all" = "single"
   ) => {
+    if (!userId) return;
     saveHistory();
     const target = transactions.find((t) => t.id === id);
     if (!target) return;
@@ -608,8 +676,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(prev => prev.filter((t) => !idsToDelete.includes(t.id)));
 
     (async () => {
-      const r1 = await safeDbRun(supabase.from('transactions').delete().in('id', idsToDelete));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+      const r1 = await safeDbRun(supabase.from('transactions').delete().eq('user_id', userId).in('id', idsToDelete));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId))));
       notifyMutationResult([r1, r2]);
     })();
   };
@@ -618,6 +686,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     updated: Transaction,
     mode: "single" | "future" = "single"
   ) => {
+    if (!userId) return;
     saveHistory();
     const original = transactions.find((t) => t.id === updated.id);
     if (!original) return;
@@ -628,11 +697,12 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     if (mode === "single" || !original.groupId) {
       updatedBanks = applyTransactionToBalance(original, true, updatedBanks);
       updatedBanks = applyTransactionToBalance(updated, false, updatedBanks);
+      const updatedWithUser = { ...updated, userId };
       setBanks(updatedBanks);
       setTransactions(prev =>
-        prev.map((t) => (t.id === updated.id ? updated : t))
+        prev.map((t) => (t.id === updated.id ? updatedWithUser : t))
       );
-      toUpsertTransactions = [updated];
+      toUpsertTransactions = [updatedWithUser];
     } else {
       const related = transactions.filter((t) =>
         t.groupId === original.groupId &&
@@ -652,6 +722,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
             bankId: updated.bankId,
             destinationBankId: updated.destinationBankId,
             method: updated.method,
+            userId,
           };
           updatedBanks = applyTransactionToBalance(newT, false, updatedBanks);
           toUpsertTransactions.push(newT);
@@ -665,46 +736,52 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     }
 
     (async () => {
-      const r1 = await safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(mapTransactionToDb)));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(mapBankToDb)));
+      const r1 = await safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(tx => mapTransactionToDb(tx, userId))));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId))));
       notifyMutationResult([r1, r2]);
     })();
   };
 
   const addCategory = async (cat: Category) => {
+    if (!userId) return;
     saveHistory();
-    setCategories(prev => [...prev, cat]);
-    const res = await safeDbRun(supabase.from('categories').insert(mapCategoryToDb(cat)));
+    const catWithUser = { ...cat, userId };
+    setCategories(prev => [...prev, catWithUser]);
+    const res = await safeDbRun(supabase.from('categories').insert(mapCategoryToDb(catWithUser, userId)));
     notifyMutationResult([res]);
     showSuccess("Categoria adicionada!");
   };
 
   const updateCategory = async (cat: Category) => {
+    if (!userId) return;
     saveHistory();
-    setCategories(prev => prev.map(c => c.id === cat.id ? cat : c));
-    const res = await safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(cat)));
+    const catWithUser = { ...cat, userId };
+    setCategories(prev => prev.map(c => c.id === cat.id ? catWithUser : c));
+    const res = await safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(catWithUser, userId)));
     notifyMutationResult([res]);
     showSuccess("Categoria atualizada!");
   };
 
   const deleteCategory = async (id: string) => {
+    if (!userId) return;
     if (categories.length <= 1) {
       showError("Você precisa de pelo menos uma categoria.");
       return;
     }
     saveHistory();
     setCategories(prev => prev.filter(c => c.id !== id));
-    const res = await safeDbRun(supabase.from('categories').delete().eq('id', id));
+    const res = await safeDbRun(supabase.from('categories').delete().eq('user_id', userId).eq('id', id));
     notifyMutationResult([res]);
     showSuccess("Categoria removida!");
   };
 
   const reorderTransactionSection = (transactionIds: string[]) => {
+    if (!userId) return;
     saveHistory();
     const updated = transactions.map((t) => {
       const index = transactionIds.indexOf(t.id);
       if (index !== -1) {
-        return { ...t, order: index };
+        return { ...t, order: index, userId };
       }
       return t;
     });
@@ -712,7 +789,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
     const reorderedItems = updated.filter(t => transactionIds.includes(t.id));
     (async () => {
-      const res = await safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(mapTransactionToDb)));
+      const res = await safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(tx => mapTransactionToDb(tx, userId))));
       notifyMutationResult([res]);
     })();
   };
