@@ -60,25 +60,45 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export const getVerifiedSession = async () => {
+export const getVerifiedSession = async (validateWithServer = false) => {
   const { data: { session }, error } = await supabase.auth.getSession();
 
-  if (!error && session?.access_token) {
-    const expiresAtMs = session.expires_at ? session.expires_at * 1000 : null;
-    if (!expiresAtMs || expiresAtMs > Date.now() + 30000) {
-      return { session, error: null };
+  let activeSession = session;
+
+  if (error || !activeSession?.access_token) {
+    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+    if (refreshErr || !refreshed.session?.access_token) {
+      return {
+        session: null,
+        error: refreshErr || error || new Error('Sessão expirada. Saia da conta e entre novamente.'),
+      };
+    }
+    activeSession = refreshed.session;
+  } else {
+    const expiresAtMs = activeSession.expires_at ? activeSession.expires_at * 1000 : null;
+    if (expiresAtMs && expiresAtMs <= Date.now() + 30000) {
+      const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+      if (!refreshErr && refreshed.session?.access_token) {
+        activeSession = refreshed.session;
+      }
     }
   }
 
-  const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
-  if (!refreshErr && refreshed.session?.access_token) {
-    return { session: refreshed.session, error: null };
+  if (validateWithServer && activeSession?.access_token) {
+    const { data: userData, error: userErr } = await supabase.auth.getUser(activeSession.access_token);
+    if (userErr || !userData?.user) {
+      const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+      if (refreshErr || !refreshed.session?.access_token) {
+        return {
+          session: null,
+          error: userErr || refreshErr || new Error('Token de sessão inválido. Saia da conta e entre novamente.'),
+        };
+      }
+      activeSession = refreshed.session;
+    }
   }
 
-  return {
-    session: null,
-    error: refreshErr || error || new Error('Sessão expirada. Saia da conta e entre novamente.'),
-  };
+  return { session: activeSession, error: null };
 };
 
 export const isAuthOrJwtError = (error: any): boolean => {

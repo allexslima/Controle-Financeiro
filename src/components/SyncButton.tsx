@@ -5,7 +5,7 @@ import { RefreshCw, AlertCircle, Wrench, UploadCloud, CheckCircle2, Activity, Wi
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useFinance } from "@/context/FinanceContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, getVerifiedSession } from "@/lib/supabase";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { showSuccess, showError } from "@/utils/toast";
 import {
@@ -59,26 +59,39 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
     setTestResult(null);
     const start = performance.now();
     try {
-      const { data, count, error } = await supabase
-        .from('banks')
-        .select('id, name', { count: 'exact' })
-        .limit(1);
-
-      const elapsed = Math.round(performance.now() - start);
-
-      if (error) {
+      const { session, error: sessionErr } = await getVerifiedSession(true);
+      if (!session?.access_token || !session.user?.id) {
+        const elapsed = Math.round(performance.now() - start);
         setTestResult({
           success: false,
-          message: `Erro da nuvem [${error.code || 'API'}]: ${error.message || 'Sem resposta'}`,
+          message: `Sessão inválida ou expirada (${sessionErr?.message || 'sem token JWT'}). Saia da conta e faça login novamente.`,
+          ms: elapsed,
+        });
+        return;
+      }
+
+      const uid = session.user.id;
+      const [banksRes, catsRes, txRes] = await Promise.all([
+        supabase.from('banks').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+        supabase.from('categories').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+        supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+      ]);
+
+      const elapsed = Math.round(performance.now() - start);
+      const err = banksRes.error || catsRes.error || txRes.error;
+
+      if (err) {
+        setTestResult({
+          success: false,
+          message: `Conta ${session.user.email} (${uid.slice(0, 8)}) — Erro [${err.code || 'API'}]: ${err.message}`,
           ms: elapsed,
         });
       } else {
         setTestResult({
           success: true,
-          message: `Conexão ativa e respondendo! Banco alcançado em ${elapsed}ms.`,
+          message: `OK em ${elapsed}ms | Conta: ${session.user.email} (${uid.slice(0, 8)}) | Nuvem: ${banksRes.count ?? 0} contas, ${catsRes.count ?? 0} categorias, ${txRes.count ?? 0} transações.`,
           ms: elapsed,
         });
-        // Tenta sincronizar os dados reais se a conexão respondeu
         await refreshFromDatabase(true);
       }
     } catch (err: any) {

@@ -424,7 +424,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const importFullData = async (data: Partial<HistoryState>): Promise<{ success: boolean; error?: string }> => {
-    const { session, error: sessionErr } = await getVerifiedSession();
+    const { session, error: sessionErr } = await getVerifiedSession(true);
     if (!session?.access_token || !session.user?.id) {
       const msg = sessionErr?.message || 'Sessão expirada. Clique em Sair da conta e entre novamente antes de restaurar.';
       setSyncStatus('error');
@@ -656,22 +656,30 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const pushLocalToDatabase = async () => {
-    if (!userId) return;
+    const { session, error: sessionErr } = await getVerifiedSession(true);
+    if (!session?.access_token || !session.user?.id) {
+      const msg = sessionErr?.message || 'Sessão expirada. Saia da conta e entre novamente para enviar os dados.';
+      setSyncErrorMessage(msg);
+      showError(msg);
+      return;
+    }
+
+    const activeUserId = session.user.id;
     setIsRefreshing(true);
     try {
       if (banks.length > 0) {
-        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
+        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' }));
         if (res?.error) throw res.error;
       }
       if (categories.length > 0) {
-        const res = await safeDbRun(supabase.from('categories').upsert(categories.map(c => mapCategoryToDb(c, userId)), { onConflict: 'user_id,id' }));
+        const res = await safeDbRun(supabase.from('categories').upsert(categories.map(c => mapCategoryToDb(c, activeUserId)), { onConflict: 'user_id,id' }));
         if (res?.error) throw res.error;
       }
       if (transactions.length > 0) {
         const BATCH_SIZE = 100;
         for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
           const slice = transactions.slice(i, i + BATCH_SIZE);
-          const res = await safeDbRun(supabase.from('transactions').upsert(slice.map(t => mapTransactionToDb(t, userId)), { onConflict: 'user_id,id' }));
+          const res = await safeDbRun(supabase.from('transactions').upsert(slice.map(t => mapTransactionToDb(t, activeUserId)), { onConflict: 'user_id,id' }));
           if (res?.error) throw res.error;
         }
       }
