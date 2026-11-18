@@ -51,8 +51,60 @@ function resolveSupabaseKey(raw?: unknown): string {
 
 const supabaseUrl = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
 const supabaseAnonKey = resolveSupabaseKey(import.meta.env.VITE_SUPABASE_ANON_KEY);
+const normalizedSupabaseUrl = supabaseUrl.replace(/\/+$/, '');
+
+function isThreePartJwt(token: string): boolean {
+  if (!token || token === supabaseAnonKey) return false;
+  const parts = token.split('.');
+  return parts.length === 3 && parts.every((part) => part.length > 0);
+}
+
+const supabaseFetch: typeof fetch = async (input, init) => {
+  const rawUrl =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url;
+
+  const headers = new Headers(input instanceof Request ? input.headers : undefined);
+  if (init?.headers) {
+    new Headers(init.headers).forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
+  let targetUrl = rawUrl;
+  if (typeof window !== 'undefined' && rawUrl.startsWith(normalizedSupabaseUrl)) {
+    const suffix = rawUrl.slice(normalizedSupabaseUrl.length);
+    const normalizedSuffix = suffix.startsWith('/') ? suffix : `/${suffix}`;
+    targetUrl = `${window.location.origin}/api/supabase${normalizedSuffix}`;
+  }
+
+  // Bloquear qualquer chamada REST sem JWT de usuário autenticado (evita fallback para anon retornando [] ou 42501)
+  if (targetUrl.includes('/rest/v1/')) {
+    const authHeader = headers.get('authorization') || '';
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    const token = match ? match[1].trim() : '';
+    if (!isThreePartJwt(token)) {
+      throw new Error(
+        'JWT_SESSION_MISSING: Sessão de usuário não autenticada ou expirada. Saia da conta e entre novamente.'
+      );
+    }
+  }
+
+  if (input instanceof Request) {
+    const nextRequest = new Request(targetUrl, input);
+    return fetch(nextRequest, { ...init, headers });
+  }
+
+  return fetch(targetUrl, { ...init, headers });
+};
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: supabaseFetch,
+  },
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -108,6 +160,7 @@ export const isAuthOrJwtError = (error: any): boolean => {
   return (
     code === 'PGRST301' ||
     code === '401' ||
+    msg.includes('jwt_session_missing') ||
     msg.includes('jwt expired') ||
     msg.includes('invalid jwt') ||
     msg.includes('invalid claim')
@@ -130,7 +183,7 @@ export const getFriendlyErrorMessage = (error: any): string => {
   const code = error.code ? `[${error.code}] ` : '';
 
   if (isAuthOrJwtError(error)) {
-    return 'Sessão expirada. Acesse o menu e faça login novamente se necessário.';
+    return 'Sessão de usuário expirada ou ausente. Saia da conta e faça login novamente para sincronizar.';
   }
   if (isNetworkOrAdblockError(error)) {
     return 'Requisição bloqueada por extensão de segurança ou bloqueador de anúncios do navegador.';

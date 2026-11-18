@@ -68,6 +68,22 @@ const getUserStorageKeys = (uid: string) => ({
   unsynced: `finance_io_has_unsynced_${uid}`,
 });
 
+const safeStorageSet = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn('Falha ao gravar no localStorage:', err);
+  }
+};
+
+const safeStorageRemove = (key: string) => {
+  try {
+    localStorage.removeItem(key);
+  } catch (err) {
+    console.warn('Falha ao remover do localStorage:', err);
+  }
+};
+
 const DEFAULT_CATEGORIES: Category[] = [
   { id: "cat-1", name: "Alimentação", color: "#ef4444" },
   { id: "cat-2", name: "Transporte", color: "#3b82f6" },
@@ -98,6 +114,21 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   const isFetchingRef = React.useRef(false);
   const isImportingRef = React.useRef(false);
   const lastRefreshTimeRef = React.useRef(0);
+  const hasUnsyncedRef = React.useRef(false);
+  const banksRef = React.useRef<Bank[]>([]);
+  const transactionsRef = React.useRef<Transaction[]>([]);
+
+  useEffect(() => {
+    hasUnsyncedRef.current = hasUnsyncedChanges;
+  }, [hasUnsyncedChanges]);
+
+  useEffect(() => {
+    banksRef.current = banks;
+  }, [banks]);
+
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
 
   // Carregar dados isolados do localStorage apenas do usuário autenticado e limpar estado ao sair
   useEffect(() => {
@@ -118,7 +149,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     // Remover chaves antigas globais (sem user_id) para evitar vazamento entre contas no mesmo navegador
     if (typeof window !== 'undefined') {
       LEGACY_STORAGE_KEYS.forEach((legacyKey) => {
-        localStorage.removeItem(legacyKey);
+        safeStorageRemove(legacyKey);
       });
 
       const keys = getUserStorageKeys(userId);
@@ -127,19 +158,33 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       const savedCats = localStorage.getItem(keys.categories);
       const savedUnsynced = localStorage.getItem(keys.unsynced) === 'true';
 
-      setBanks(savedBanks ? JSON.parse(savedBanks) : []);
-      if (savedTxs) {
-        const parsed = JSON.parse(savedTxs);
-        setTransactions(
-          parsed.map((t: Transaction, index: number) => ({
-            ...t,
-            order: t.order !== undefined ? t.order : index,
-          }))
-        );
-      } else {
+      try {
+        setBanks(savedBanks ? JSON.parse(savedBanks) : []);
+      } catch {
+        setBanks([]);
+      }
+      try {
+        if (savedTxs) {
+          const parsed = JSON.parse(savedTxs);
+          setTransactions(
+            Array.isArray(parsed)
+              ? parsed.map((t: Transaction, index: number) => ({
+                  ...t,
+                  order: t.order !== undefined ? t.order : index,
+                }))
+              : []
+          );
+        } else {
+          setTransactions([]);
+        }
+      } catch {
         setTransactions([]);
       }
-      setCategories(savedCats ? JSON.parse(savedCats) : DEFAULT_CATEGORIES);
+      try {
+        setCategories(savedCats ? JSON.parse(savedCats) : DEFAULT_CATEGORIES);
+      } catch {
+        setCategories(DEFAULT_CATEGORIES);
+      }
       setHasUnsyncedChanges(savedUnsynced);
     }
 
@@ -153,9 +198,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     if (typeof window !== 'undefined' && userId && loadedUserId === userId) {
       const keys = getUserStorageKeys(userId);
       if (hasUnsyncedChanges) {
-        localStorage.setItem(keys.unsynced, 'true');
+        safeStorageSet(keys.unsynced, 'true');
       } else {
-        localStorage.removeItem(keys.unsynced);
+        safeStorageRemove(keys.unsynced);
       }
     }
   }, [hasUnsyncedChanges, userId, loadedUserId]);
@@ -164,15 +209,23 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     if (typeof window !== 'undefined' && userId && loadedUserId === userId) {
       const keys = getUserStorageKeys(userId);
-      localStorage.setItem(keys.banks, JSON.stringify(banks));
-      localStorage.setItem(keys.transactions, JSON.stringify(transactions));
-      localStorage.setItem(keys.categories, JSON.stringify(categories));
+      safeStorageSet(keys.banks, JSON.stringify(banks));
+      safeStorageSet(keys.transactions, JSON.stringify(transactions));
+      safeStorageSet(keys.categories, JSON.stringify(categories));
     }
   }, [banks, transactions, categories, userId, loadedUserId]);
 
   // Carregar dados do Supabase filtrados estritamente pelo user_id autenticado
   const refreshFromDatabase = useCallback(async (force = false) => {
     if (!userId || isImportingRef.current) return;
+
+    const userKeys = getUserStorageKeys(userId);
+    const pendingLocal =
+      hasUnsyncedRef.current ||
+      (typeof window !== 'undefined' && localStorage.getItem(userKeys.unsynced) === 'true');
+    if (!force && pendingLocal) {
+      return;
+    }
 
     const now = Date.now();
     if (isFetchingRef.current || (!force && (now - lastRefreshTimeRef.current < 2000))) {
@@ -263,28 +316,50 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       const dbTransactions = allTxRows.map(mapTransactionFromDb);
 
       const keys = getUserStorageKeys(activeUserId);
+      const stillHasLocalUnsynced =
+        hasUnsyncedRef.current ||
+        (typeof window !== 'undefined' && localStorage.getItem(keys.unsynced) === 'true');
 
-      // Sempre aplicar o estado exato da nuvem para este usuário (inclusive listas vazias para novos usuários)
+      // Nunca sobrescrever dados locais ou backup pendente com listas vazias da nuvem
+      if (
+        stillHasLocalUnsynced &&
+        dbBanks.length === 0 &&
+        dbTransactions.length === 0 &&
+        (banksRef.current.length > 0 || transactionsRef.current.length > 0)
+      ) {
+        setSyncStatus('error');
+        setSyncErrorMessage(
+          'Há alterações ou backup pendente neste dispositivo que ainda não foram enviados para a nuvem. Clique em "Enviar Alterações Locais para a Nuvem".'
+        );
+        return;
+      }
+
+      // Aplicar estado da nuvem para este usuário
       setBanks(dbBanks);
-      localStorage.setItem(keys.banks, JSON.stringify(dbBanks));
+      safeStorageSet(keys.banks, JSON.stringify(dbBanks));
 
       if (dbCategories.length > 0) {
         setCategories(dbCategories);
-        localStorage.setItem(keys.categories, JSON.stringify(dbCategories));
+        safeStorageSet(keys.categories, JSON.stringify(dbCategories));
       } else {
         // Novo usuário: inicializar categorias padrão vinculadas ao seu user_id
         const seededCats = DEFAULT_CATEGORIES.map(c => ({ ...c, userId: activeUserId }));
         setCategories(seededCats);
-        localStorage.setItem(keys.categories, JSON.stringify(seededCats));
-        await safeDbRun(
+        safeStorageSet(keys.categories, JSON.stringify(seededCats));
+        const seedRes = await safeDbRun(
           supabase
             .from('categories')
             .upsert(seededCats.map(c => mapCategoryToDb(c, activeUserId)), { onConflict: 'user_id,id' })
         );
+        if (seedRes?.error) {
+          setSyncStatus('error');
+          setSyncErrorMessage(getFriendlyErrorMessage(seedRes.error));
+          return;
+        }
       }
 
       setTransactions(dbTransactions);
-      localStorage.setItem(keys.transactions, JSON.stringify(dbTransactions));
+      safeStorageSet(keys.transactions, JSON.stringify(dbTransactions));
 
       setSyncStatus('connected');
       setSyncErrorMessage(null);
@@ -477,9 +552,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       setTransactions(nextTransactions);
 
       const keys = getUserStorageKeys(activeUserId);
-      localStorage.setItem(keys.banks, JSON.stringify(nextBanks));
-      localStorage.setItem(keys.categories, JSON.stringify(nextCategories));
-      localStorage.setItem(keys.transactions, JSON.stringify(nextTransactions));
+      safeStorageSet(keys.banks, JSON.stringify(nextBanks));
+      safeStorageSet(keys.categories, JSON.stringify(nextCategories));
+      safeStorageSet(keys.transactions, JSON.stringify(nextTransactions));
 
       // 1. Enviar categorias
       if (nextCategories.length > 0) {
