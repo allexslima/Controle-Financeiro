@@ -47,7 +47,7 @@ interface FinanceContextType {
   deleteCategory: (id: string) => void;
   undo: () => void;
   canUndo: boolean;
-  importFullData: (data: HistoryState) => void;
+  importFullData: (data: Partial<HistoryState>) => Promise<{ success: boolean; error?: string }>;
   reorderTransactionSection: (transactionIds: string[]) => void;
 }
 
@@ -95,6 +95,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
 
   const isFetchingRef = React.useRef(false);
+  const isImportingRef = React.useRef(false);
   const lastRefreshTimeRef = React.useRef(0);
 
   // Carregar dados isolados do localStorage apenas do usuário autenticado e limpar estado ao sair
@@ -170,7 +171,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
   // Carregar dados do Supabase filtrados estritamente pelo user_id autenticado
   const refreshFromDatabase = useCallback(async (force = false) => {
-    if (!userId) return;
+    if (!userId || isImportingRef.current) return;
 
     const now = Date.now();
     if (isFetchingRef.current || (!force && (now - lastRefreshTimeRef.current < 2000))) {
@@ -263,7 +264,11 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const seededCats = DEFAULT_CATEGORIES.map(c => ({ ...c, userId }));
         setCategories(seededCats);
         localStorage.setItem(keys.categories, JSON.stringify(seededCats));
-        await safeDbRun(supabase.from('categories').upsert(seededCats.map(c => mapCategoryToDb(c, userId))));
+        await safeDbRun(
+          supabase
+            .from('categories')
+            .upsert(seededCats.map(c => mapCategoryToDb(c, userId)), { onConflict: 'user_id,id' })
+        );
       }
 
       setTransactions(dbTransactions);
@@ -308,9 +313,12 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     // 3. Supabase Realtime channel filtrado por usuário
     let debounceTimer: any = null;
     const triggerDebouncedRefresh = () => {
+      if (isImportingRef.current) return;
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        refreshFromDatabase(true);
+        if (!isImportingRef.current) {
+          refreshFromDatabase(true);
+        }
       }, 1000);
     };
 
@@ -383,10 +391,10 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     }
 
     if (lastState.banks.length > 0) {
-      safeDbRun(supabase.from('banks').upsert(lastState.banks.map(b => mapBankToDb(b, userId))));
+      safeDbRun(supabase.from('banks').upsert(lastState.banks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
     }
     if (lastState.categories.length > 0) {
-      safeDbRun(supabase.from('categories').upsert(lastState.categories.map(c => mapCategoryToDb(c, userId))));
+      safeDbRun(supabase.from('categories').upsert(lastState.categories.map(c => mapCategoryToDb(c, userId)), { onConflict: 'user_id,id' }));
     }
 
     // Restaurar apenas transações alteradas ou que foram deletadas, evitando payloads gigantes
@@ -397,34 +405,133 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       return current.amount !== t.amount || current.description !== t.description || current.bankId !== t.bankId || current.date !== t.date || current.category !== t.category;
     });
     if (changedOrRestoredTxs.length > 0) {
-      safeDbRun(supabase.from('transactions').upsert(changedOrRestoredTxs.map(t => mapTransactionToDb(t, userId))));
+      safeDbRun(supabase.from('transactions').upsert(changedOrRestoredTxs.map(t => mapTransactionToDb(t, userId)), { onConflict: 'user_id,id' }));
     }
 
     showSuccess("Ação desfeita!");
   };
 
-  const importFullData = async (data: HistoryState) => {
-    if (!userId) return;
+  const importFullData = async (data: Partial<HistoryState>): Promise<{ success: boolean; error?: string }> => {
+    if (!userId) {
+      return { success: false, error: 'Usuário não autenticado.' };
+    }
+
+    const dedupeById = <T extends { id?: string }>(items: T[]): T[] => {
+      const map = new Map<string, T>();
+      items.forEach((item, idx) => {
+        const safeId = item?.id ? String(item.id) : `imp-${Date.now()}-${idx}`;
+        map.set(safeId, { ...item, id: safeId });
+      });
+      return Array.from(map.values());
+    };
+
+    const nextBanks: Bank[] = Array.isArray(data.banks)
+      ? dedupeById(data.banks).map((b) => ({
+          ...b,
+          balance: Number(b.balance) || 0,
+          userId,
+        }))
+      : banks;
+
+    const nextCategories: Category[] = Array.isArray(data.categories) && data.categories.length > 0
+      ? dedupeById(data.categories).map((c) => ({ ...c, userId }))
+      : categories;
+
+    const nextTransactions: Transaction[] = Array.isArray(data.transactions)
+      ? dedupeById(data.transactions)
+          .filter((t) => Boolean(t.bankId))
+          .map((t, idx) => ({
+            ...t,
+            amount: Number(t.amount) || 0,
+            order: t.order !== undefined && !isNaN(Number(t.order)) ? Number(t.order) : idx,
+            userId,
+          }))
+      : transactions;
+
     saveHistory();
-    if (data.banks) {
-      setBanks(data.banks);
-      if (data.banks.length > 0) {
-        safeDbRun(supabase.from('banks').upsert(data.banks.map(b => mapBankToDb(b, userId))));
+    isImportingRef.current = true;
+    setIsRefreshing(true);
+
+    try {
+      // Atualizar estado local e localStorage imediatamente
+      setBanks(nextBanks);
+      setCategories(nextCategories);
+      setTransactions(nextTransactions);
+
+      const keys = getUserStorageKeys(userId);
+      localStorage.setItem(keys.banks, JSON.stringify(nextBanks));
+      localStorage.setItem(keys.categories, JSON.stringify(nextCategories));
+      localStorage.setItem(keys.transactions, JSON.stringify(nextTransactions));
+
+      // 1. Enviar categorias
+      if (nextCategories.length > 0) {
+        const catRes = await safeDbRun(
+          supabase
+            .from('categories')
+            .upsert(nextCategories.map(c => mapCategoryToDb(c, userId)), { onConflict: 'user_id,id' })
+        );
+        if (catRes?.error) throw catRes.error;
       }
-    }
-    if (data.transactions) {
-      setTransactions(data.transactions);
+
+      // 2. Enviar bancos/contas/cartões
+      if (nextBanks.length > 0) {
+        const bankRes = await safeDbRun(
+          supabase
+            .from('banks')
+            .upsert(nextBanks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' })
+        );
+        if (bankRes?.error) throw bankRes.error;
+      }
+
+      // 3. Enviar transações em lotes aguardando cada envio
       const BATCH_SIZE = 100;
-      for (let i = 0; i < data.transactions.length; i += BATCH_SIZE) {
-        const slice = data.transactions.slice(i, i + BATCH_SIZE);
-        await safeDbRun(supabase.from('transactions').upsert(slice.map(t => mapTransactionToDb(t, userId))));
+      for (let i = 0; i < nextTransactions.length; i += BATCH_SIZE) {
+        const slice = nextTransactions.slice(i, i + BATCH_SIZE);
+        const txRes = await safeDbRun(
+          supabase
+            .from('transactions')
+            .upsert(slice.map(t => mapTransactionToDb(t, userId)), { onConflict: 'user_id,id' })
+        );
+        if (txRes?.error) throw txRes.error;
       }
-    }
-    if (data.categories) {
-      setCategories(data.categories);
-      if (data.categories.length > 0) {
-        safeDbRun(supabase.from('categories').upsert(data.categories.map(c => mapCategoryToDb(c, userId))));
+
+      // 4. Remover registros antigos que não pertencem ao backup importado (somente após salvar o backup)
+      if (Array.isArray(data.banks)) {
+        const importedBankIds = new Set(nextBanks.map(b => b.id));
+        const staleBankIds = banks.filter(b => !importedBankIds.has(b.id)).map(b => b.id);
+        if (staleBankIds.length > 0) {
+          const delBankRes = await safeDbRun(
+            supabase.from('banks').delete().eq('user_id', userId).in('id', staleBankIds)
+          );
+          if (delBankRes?.error) throw delBankRes.error;
+        }
       }
+
+      if (Array.isArray(data.transactions)) {
+        const importedTxIds = new Set(nextTransactions.map(t => t.id));
+        const staleTxIds = transactions.filter(t => !importedTxIds.has(t.id)).map(t => t.id);
+        if (staleTxIds.length > 0) {
+          const delTxRes = await safeDbRun(
+            supabase.from('transactions').delete().eq('user_id', userId).in('id', staleTxIds)
+          );
+          if (delTxRes?.error) throw delTxRes.error;
+        }
+      }
+
+      lastRefreshTimeRef.current = Date.now();
+      setSyncStatus('connected');
+      setSyncErrorMessage(null);
+      setHasUnsyncedChanges(false);
+      return { success: true };
+    } catch (err: any) {
+      const msg = getFriendlyErrorMessage(err);
+      setHasUnsyncedChanges(true);
+      setSyncStatus('error');
+      setSyncErrorMessage(msg);
+      return { success: false, error: msg };
+    } finally {
+      isImportingRef.current = false;
+      setIsRefreshing(false);
     }
   };
 
@@ -535,18 +642,18 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setIsRefreshing(true);
     try {
       if (banks.length > 0) {
-        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(b => mapBankToDb(b, userId))));
+        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
         if (res?.error) throw res.error;
       }
       if (categories.length > 0) {
-        const res = await safeDbRun(supabase.from('categories').upsert(categories.map(c => mapCategoryToDb(c, userId))));
+        const res = await safeDbRun(supabase.from('categories').upsert(categories.map(c => mapCategoryToDb(c, userId)), { onConflict: 'user_id,id' }));
         if (res?.error) throw res.error;
       }
       if (transactions.length > 0) {
         const BATCH_SIZE = 100;
         for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
           const slice = transactions.slice(i, i + BATCH_SIZE);
-          const res = await safeDbRun(supabase.from('transactions').upsert(slice.map(t => mapTransactionToDb(t, userId))));
+          const res = await safeDbRun(supabase.from('transactions').upsert(slice.map(t => mapTransactionToDb(t, userId)), { onConflict: 'user_id,id' }));
           if (res?.error) throw res.error;
         }
       }
@@ -588,7 +695,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     saveHistory();
     const bankWithUser = { ...updatedBank, userId };
     setBanks(prev => prev.map(b => b.id === updatedBank.id ? bankWithUser : b));
-    const res = await safeDbRun(supabase.from('banks').upsert(mapBankToDb(bankWithUser, userId)));
+    const res = await safeDbRun(supabase.from('banks').upsert(mapBankToDb(bankWithUser, userId), { onConflict: 'user_id,id' }));
     notifyMutationResult([res]);
   };
 
@@ -636,8 +743,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(prev => [...newTransactions, ...prev]);
 
     (async () => {
-      const r1 = await safeDbRun(supabase.from('transactions').upsert(newTransactions.map(tx => mapTransactionToDb(tx, userId))));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId))));
+      const r1 = await safeDbRun(supabase.from('transactions').upsert(newTransactions.map(tx => mapTransactionToDb(tx, userId)), { onConflict: 'user_id,id' }));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
       notifyMutationResult([r1, r2]);
     })();
 
@@ -677,7 +784,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
     (async () => {
       const r1 = await safeDbRun(supabase.from('transactions').delete().eq('user_id', userId).in('id', idsToDelete));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId))));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
       notifyMutationResult([r1, r2]);
     })();
   };
@@ -736,8 +843,8 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     }
 
     (async () => {
-      const r1 = await safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(tx => mapTransactionToDb(tx, userId))));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId))));
+      const r1 = await safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(tx => mapTransactionToDb(tx, userId)), { onConflict: 'user_id,id' }));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
       notifyMutationResult([r1, r2]);
     })();
   };
@@ -757,7 +864,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     saveHistory();
     const catWithUser = { ...cat, userId };
     setCategories(prev => prev.map(c => c.id === cat.id ? catWithUser : c));
-    const res = await safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(catWithUser, userId)));
+    const res = await safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(catWithUser, userId), { onConflict: 'user_id,id' }));
     notifyMutationResult([res]);
     showSuccess("Categoria atualizada!");
   };
@@ -789,7 +896,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
     const reorderedItems = updated.filter(t => transactionIds.includes(t.id));
     (async () => {
-      const res = await safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(tx => mapTransactionToDb(tx, userId))));
+      const res = await safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(tx => mapTransactionToDb(tx, userId)), { onConflict: 'user_id,id' }));
       notifyMutationResult([res]);
     })();
   };

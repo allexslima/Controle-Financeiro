@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useRef } from 'react';
-import { Share2, Download, Upload, FileJson } from "lucide-react";
+import React, { useRef, useState } from 'react';
+import { Share2, Download, Upload, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useFinance } from "@/context/FinanceContext";
 import { showSuccess, showError } from "@/utils/toast";
+import { Bank, Category, Transaction } from "@/types/finance";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,14 +20,31 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface ShareDataButtonProps {
   className?: string;
 }
 
+interface ParsedBackup {
+  banks?: Bank[];
+  transactions?: Transaction[];
+  categories?: Category[];
+}
+
 const ShareDataButton = ({ className }: ShareDataButtonProps) => {
   const { banks, transactions, categories, importFullData } = useFinance();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingImport, setPendingImport] = useState<ParsedBackup | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const getData = () => ({
     banks,
@@ -65,7 +83,6 @@ const ShareDataButton = ({ className }: ShareDataButtonProps) => {
     const exportFileDefaultName = `finance_backup_${new Date().toISOString().split('T')[0]}.json`;
     const file = new File([blob], exportFileDefaultName, { type: 'application/json' });
 
-    // Try to share via Web Share API if supported
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({
@@ -76,12 +93,10 @@ const ShareDataButton = ({ className }: ShareDataButtonProps) => {
         showSuccess('Backup compartilhado com sucesso!');
         return;
       } catch (shareErr) {
-        // If sharing fails, fallback to download
         console.warn('Share failed, falling back to download', shareErr);
       }
     }
 
-    // Fallback: trigger download
     const linkElement = document.createElement('a');
     linkElement.href = URL.createObjectURL(blob);
     linkElement.download = exportFileDefaultName;
@@ -98,19 +113,47 @@ const ShareDataButton = ({ className }: ShareDataButtonProps) => {
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
-        const parsed = JSON.parse(content);
-        
-        if (window.confirm("Deseja importar os dados deste arquivo? Isso substituirá seus dados atuais.")) {
-          importFullData(parsed);
-          showSuccess("Dados importados com sucesso!");
+        const raw = JSON.parse(content);
+        const payload = raw?.data && typeof raw.data === 'object' ? raw.data : raw;
+
+        const hasBanks = Array.isArray(payload?.banks);
+        const hasTransactions = Array.isArray(payload?.transactions);
+        const hasCategories = Array.isArray(payload?.categories);
+
+        if (!hasBanks && !hasTransactions && !hasCategories) {
+          showError("Arquivo .json não contém contas, categorias ou transações válidas.");
+          return;
         }
-      } catch (err) {
-        showError("Arquivo de backup inválido.");
+
+        setPendingImport({
+          banks: hasBanks ? payload.banks : undefined,
+          transactions: hasTransactions ? payload.transactions : undefined,
+          categories: hasCategories ? payload.categories : undefined,
+        });
+        setConfirmOpen(true);
+      } catch {
+        showError("Arquivo de backup inválido ou corrompido.");
       }
     };
     reader.readAsText(file);
-    // Limpa o input para permitir importar o mesmo arquivo de novo se necessário
     event.target.value = '';
+  };
+
+  const handleConfirmImport = async () => {
+    if (!pendingImport || isImporting) return;
+    setIsImporting(true);
+    try {
+      const result = await importFullData(pendingImport);
+      if (result.success) {
+        setConfirmOpen(false);
+        setPendingImport(null);
+        showSuccess("Backup restaurado e salvo na nuvem com sucesso!");
+      } else {
+        showError(`Falha ao salvar backup na nuvem: ${result.error || 'Erro desconhecido.'}`);
+      }
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   return (
@@ -119,7 +162,7 @@ const ShareDataButton = ({ className }: ShareDataButtonProps) => {
         type="file" 
         ref={fileInputRef} 
         className="hidden" 
-        accept=".json" 
+        accept=".json,application/json" 
         onChange={handleImportFile}
       />
       
@@ -161,6 +204,61 @@ const ShareDataButton = ({ className }: ShareDataButtonProps) => {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog open={confirmOpen} onOpenChange={(open) => { if (!isImporting) setConfirmOpen(open); }}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+              Restaurar Backup (.json)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+              Os dados encontrados neste arquivo serão aplicados à sua conta e salvos na nuvem.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingImport && (
+            <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Contas / Cartões / Investimentos:</span>
+                <span className="font-bold">{pendingImport.banks?.length ?? 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Categorias:</span>
+                <span className="font-bold">{pendingImport.categories?.length ?? 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Transações:</span>
+                <span className="font-bold">{pendingImport.transactions?.length ?? 0}</span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isImporting}
+              onClick={() => {
+                setConfirmOpen(false);
+                setPendingImport(null);
+              }}
+              className="rounded-xl"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={isImporting}
+              onClick={handleConfirmImport}
+              className="rounded-xl font-bold gap-2"
+            >
+              {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+              {isImporting ? "Restaurando na nuvem..." : "Restaurar Backup Agora"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
