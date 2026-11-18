@@ -52,7 +52,34 @@ function resolveSupabaseKey(raw?: unknown): string {
 const supabaseUrl = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
 const supabaseAnonKey = resolveSupabaseKey(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
+
+export const getVerifiedSession = async () => {
+  const { data: { session }, error } = await supabase.auth.getSession();
+
+  if (!error && session?.access_token) {
+    const expiresAtMs = session.expires_at ? session.expires_at * 1000 : null;
+    if (!expiresAtMs || expiresAtMs > Date.now() + 30000) {
+      return { session, error: null };
+    }
+  }
+
+  const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+  if (!refreshErr && refreshed.session?.access_token) {
+    return { session: refreshed.session, error: null };
+  }
+
+  return {
+    session: null,
+    error: refreshErr || error || new Error('Sessão expirada. Saia da conta e entre novamente.'),
+  };
+};
 
 export const isAuthOrJwtError = (error: any): boolean => {
   if (!error) return false;

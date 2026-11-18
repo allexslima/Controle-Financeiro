@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { 
   supabase, 
   safeDbRun,
+  getVerifiedSession,
   getFriendlyErrorMessage,
   mapBankFromDb, 
   mapBankToDb, 
@@ -183,9 +184,20 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setIsRefreshing(true);
 
     try {
+      const { session, error: sessionErr } = await getVerifiedSession();
+      if (!session?.access_token || !session.user?.id) {
+        setSyncStatus('error');
+        setSyncErrorMessage(
+          sessionErr?.message || 'Sessão expirada. Saia da conta e entre novamente para sincronizar.'
+        );
+        return;
+      }
+
+      const activeUserId = session.user.id;
+
       const [banksRes, catRes] = await Promise.all([
-        supabase.from('banks').select('*').eq('user_id', userId),
-        supabase.from('categories').select('*').eq('user_id', userId),
+        supabase.from('banks').select('*').eq('user_id', activeUserId),
+        supabase.from('categories').select('*').eq('user_id', activeUserId),
       ]);
 
       if (
@@ -215,7 +227,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const txRes = await supabase
           .from('transactions')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', activeUserId)
           .order('order', { ascending: true })
           .order('created_at', { ascending: true })
           .range(from, from + PAGE_SIZE - 1);
@@ -250,7 +262,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       const dbCategories = (catRes.data || []).map(mapCategoryFromDb);
       const dbTransactions = allTxRows.map(mapTransactionFromDb);
 
-      const keys = getUserStorageKeys(userId);
+      const keys = getUserStorageKeys(activeUserId);
 
       // Sempre aplicar o estado exato da nuvem para este usuário (inclusive listas vazias para novos usuários)
       setBanks(dbBanks);
@@ -261,13 +273,13 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         localStorage.setItem(keys.categories, JSON.stringify(dbCategories));
       } else {
         // Novo usuário: inicializar categorias padrão vinculadas ao seu user_id
-        const seededCats = DEFAULT_CATEGORIES.map(c => ({ ...c, userId }));
+        const seededCats = DEFAULT_CATEGORIES.map(c => ({ ...c, userId: activeUserId }));
         setCategories(seededCats);
         localStorage.setItem(keys.categories, JSON.stringify(seededCats));
         await safeDbRun(
           supabase
             .from('categories')
-            .upsert(seededCats.map(c => mapCategoryToDb(c, userId)), { onConflict: 'user_id,id' })
+            .upsert(seededCats.map(c => mapCategoryToDb(c, activeUserId)), { onConflict: 'user_id,id' })
         );
       }
 
@@ -412,9 +424,15 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const importFullData = async (data: Partial<HistoryState>): Promise<{ success: boolean; error?: string }> => {
-    if (!userId) {
-      return { success: false, error: 'Usuário não autenticado.' };
+    const { session, error: sessionErr } = await getVerifiedSession();
+    if (!session?.access_token || !session.user?.id) {
+      const msg = sessionErr?.message || 'Sessão expirada. Clique em Sair da conta e entre novamente antes de restaurar.';
+      setSyncStatus('error');
+      setSyncErrorMessage(msg);
+      return { success: false, error: msg };
     }
+
+    const activeUserId = session.user.id;
 
     const dedupeById = <T extends { id?: string }>(items: T[]): T[] => {
       const map = new Map<string, T>();
@@ -429,12 +447,12 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       ? dedupeById(data.banks).map((b) => ({
           ...b,
           balance: Number(b.balance) || 0,
-          userId,
+          userId: activeUserId,
         }))
       : banks;
 
     const nextCategories: Category[] = Array.isArray(data.categories) && data.categories.length > 0
-      ? dedupeById(data.categories).map((c) => ({ ...c, userId }))
+      ? dedupeById(data.categories).map((c) => ({ ...c, userId: activeUserId }))
       : categories;
 
     const nextTransactions: Transaction[] = Array.isArray(data.transactions)
@@ -444,7 +462,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
             ...t,
             amount: Number(t.amount) || 0,
             order: t.order !== undefined && !isNaN(Number(t.order)) ? Number(t.order) : idx,
-            userId,
+            userId: activeUserId,
           }))
       : transactions;
 
@@ -458,7 +476,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       setCategories(nextCategories);
       setTransactions(nextTransactions);
 
-      const keys = getUserStorageKeys(userId);
+      const keys = getUserStorageKeys(activeUserId);
       localStorage.setItem(keys.banks, JSON.stringify(nextBanks));
       localStorage.setItem(keys.categories, JSON.stringify(nextCategories));
       localStorage.setItem(keys.transactions, JSON.stringify(nextTransactions));
@@ -468,7 +486,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const catRes = await safeDbRun(
           supabase
             .from('categories')
-            .upsert(nextCategories.map(c => mapCategoryToDb(c, userId)), { onConflict: 'user_id,id' })
+            .upsert(nextCategories.map(c => mapCategoryToDb(c, activeUserId)), { onConflict: 'user_id,id' })
         );
         if (catRes?.error) throw catRes.error;
       }
@@ -478,7 +496,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const bankRes = await safeDbRun(
           supabase
             .from('banks')
-            .upsert(nextBanks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' })
+            .upsert(nextBanks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' })
         );
         if (bankRes?.error) throw bankRes.error;
       }
@@ -490,7 +508,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const txRes = await safeDbRun(
           supabase
             .from('transactions')
-            .upsert(slice.map(t => mapTransactionToDb(t, userId)), { onConflict: 'user_id,id' })
+            .upsert(slice.map(t => mapTransactionToDb(t, activeUserId)), { onConflict: 'user_id,id' })
         );
         if (txRes?.error) throw txRes.error;
       }
@@ -501,7 +519,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const staleBankIds = banks.filter(b => !importedBankIds.has(b.id)).map(b => b.id);
         if (staleBankIds.length > 0) {
           const delBankRes = await safeDbRun(
-            supabase.from('banks').delete().eq('user_id', userId).in('id', staleBankIds)
+            supabase.from('banks').delete().eq('user_id', activeUserId).in('id', staleBankIds)
           );
           if (delBankRes?.error) throw delBankRes.error;
         }
@@ -512,7 +530,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const staleTxIds = transactions.filter(t => !importedTxIds.has(t.id)).map(t => t.id);
         if (staleTxIds.length > 0) {
           const delTxRes = await safeDbRun(
-            supabase.from('transactions').delete().eq('user_id', userId).in('id', staleTxIds)
+            supabase.from('transactions').delete().eq('user_id', activeUserId).in('id', staleTxIds)
           );
           if (delTxRes?.error) throw delTxRes.error;
         }
