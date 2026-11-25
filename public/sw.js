@@ -1,9 +1,8 @@
-// Service Worker básico para permitir que o navegador reconheça o PWA
-self.addEventListener('install', (event) => {
+// Service Worker minimalista para PWA sem interceptar requisições de rede/API
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-self.addEventListener('fetch', (event) => {
-  // Apenas repassa as requisições (estratégia network-first simplificada)
-  event.respondWith(fetch(event.request));
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
 });

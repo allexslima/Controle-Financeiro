@@ -34,7 +34,7 @@ interface FinanceContextType {
   syncErrorMessage: string | null;
   isRefreshing: boolean;
   hasUnsyncedChanges: boolean;
-  refreshFromDatabase: (force?: boolean) => Promise<void>;
+  refreshFromDatabase: (force?: boolean) => Promise<boolean>;
   repairConnection: () => Promise<void>;
   pushLocalToDatabase: () => Promise<void>;
   addBank: (bank: Bank) => void;
@@ -158,33 +158,45 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       const savedCats = localStorage.getItem(keys.categories);
       const savedUnsynced = localStorage.getItem(keys.unsynced) === 'true';
 
+      let loadedBanks: Bank[] = [];
+      let loadedTxs: Transaction[] = [];
+      let loadedCats: Category[] = DEFAULT_CATEGORIES;
+
       try {
-        setBanks(savedBanks ? JSON.parse(savedBanks) : []);
+        loadedBanks = savedBanks ? JSON.parse(savedBanks) : [];
+        if (!Array.isArray(loadedBanks)) loadedBanks = [];
       } catch {
-        setBanks([]);
+        loadedBanks = [];
       }
       try {
         if (savedTxs) {
           const parsed = JSON.parse(savedTxs);
-          setTransactions(
-            Array.isArray(parsed)
-              ? parsed.map((t: Transaction, index: number) => ({
-                  ...t,
-                  order: t.order !== undefined ? t.order : index,
-                }))
-              : []
-          );
-        } else {
-          setTransactions([]);
+          loadedTxs = Array.isArray(parsed)
+            ? parsed.map((t: Transaction, index: number) => ({
+                ...t,
+                order: t.order !== undefined ? t.order : index,
+              }))
+            : [];
         }
       } catch {
-        setTransactions([]);
+        loadedTxs = [];
       }
       try {
-        setCategories(savedCats ? JSON.parse(savedCats) : DEFAULT_CATEGORIES);
+        loadedCats = savedCats ? JSON.parse(savedCats) : DEFAULT_CATEGORIES;
+        if (!Array.isArray(loadedCats) || loadedCats.length === 0) {
+          loadedCats = DEFAULT_CATEGORIES;
+        }
       } catch {
-        setCategories(DEFAULT_CATEGORIES);
+        loadedCats = DEFAULT_CATEGORIES;
       }
+
+      banksRef.current = loadedBanks;
+      transactionsRef.current = loadedTxs;
+      hasUnsyncedRef.current = savedUnsynced;
+
+      setBanks(loadedBanks);
+      setTransactions(loadedTxs);
+      setCategories(loadedCats);
       setHasUnsyncedChanges(savedUnsynced);
     }
 
@@ -216,20 +228,20 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   }, [banks, transactions, categories, userId, loadedUserId]);
 
   // Carregar dados do Supabase filtrados estritamente pelo user_id autenticado
-  const refreshFromDatabase = useCallback(async (force = false) => {
-    if (!userId || isImportingRef.current) return;
+  const refreshFromDatabase = useCallback(async (force = false): Promise<boolean> => {
+    if (!userId || isImportingRef.current) return false;
 
     const userKeys = getUserStorageKeys(userId);
     const pendingLocal =
       hasUnsyncedRef.current ||
       (typeof window !== 'undefined' && localStorage.getItem(userKeys.unsynced) === 'true');
     if (!force && pendingLocal) {
-      return;
+      return false;
     }
 
     const now = Date.now();
     if (isFetchingRef.current || (!force && (now - lastRefreshTimeRef.current < 2000))) {
-      return;
+      return true;
     }
 
     isFetchingRef.current = true;
@@ -243,7 +255,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         setSyncErrorMessage(
           sessionErr?.message || 'Sessão expirada. Saia da conta e entre novamente para sincronizar.'
         );
-        return;
+        return false;
       }
 
       const activeUserId = session.user.id;
@@ -259,7 +271,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       ) {
         setSyncStatus('needs_tables');
         setSyncErrorMessage('Tabelas ausentes no Supabase. Execute o script SQL no painel.');
-        return;
+        return false;
       }
 
       if (banksRes.error || catRes.error) {
@@ -267,7 +279,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         const msg = getFriendlyErrorMessage(err);
         setSyncStatus('error');
         setSyncErrorMessage(msg);
-        return;
+        return false;
       }
 
       // Buscar TODAS as transações do usuário em páginas para não cortar além do limite de 1000
@@ -289,7 +301,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
           if (txRes.error.code === 'PGRST205') {
             setSyncStatus('needs_tables');
             setSyncErrorMessage('Tabela de transações ausente.');
-            return;
+            return false;
           }
           console.warn('Erro ao carregar lote de transações:', txRes.error);
           setSyncErrorMessage(getFriendlyErrorMessage(txRes.error));
@@ -308,7 +320,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
       if (hasTxError) {
         setSyncStatus('error');
-        return;
+        return false;
       }
 
       const dbBanks = (banksRes.data || []).map(mapBankFromDb);
@@ -331,10 +343,11 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         setSyncErrorMessage(
           'Há alterações ou backup pendente neste dispositivo que ainda não foram enviados para a nuvem. Clique em "Enviar Alterações Locais para a Nuvem".'
         );
-        return;
+        return false;
       }
 
       // Aplicar estado da nuvem para este usuário
+      banksRef.current = dbBanks;
       setBanks(dbBanks);
       safeStorageSet(keys.banks, JSON.stringify(dbBanks));
 
@@ -354,21 +367,26 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
         if (seedRes?.error) {
           setSyncStatus('error');
           setSyncErrorMessage(getFriendlyErrorMessage(seedRes.error));
-          return;
+          return false;
         }
       }
 
+      transactionsRef.current = dbTransactions;
       setTransactions(dbTransactions);
       safeStorageSet(keys.transactions, JSON.stringify(dbTransactions));
 
+      hasUnsyncedRef.current = false;
+      safeStorageRemove(keys.unsynced);
       setSyncStatus('connected');
       setSyncErrorMessage(null);
       setHasUnsyncedChanges(false);
+      return true;
     } catch (err: any) {
       console.warn('Falha na sincronização com Supabase:', err);
       const msg = getFriendlyErrorMessage(err);
       setSyncStatus('error');
       setSyncErrorMessage(msg);
+      return false;
     } finally {
       isFetchingRef.current = false;
       setIsRefreshing(false);
@@ -546,12 +564,18 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setIsRefreshing(true);
 
     try {
-      // Atualizar estado local e localStorage imediatamente
+      // Atualizar estado local, refs e localStorage imediatamente antes de enviar à nuvem
+      banksRef.current = nextBanks;
+      transactionsRef.current = nextTransactions;
+      hasUnsyncedRef.current = true;
+
       setBanks(nextBanks);
       setCategories(nextCategories);
       setTransactions(nextTransactions);
+      setHasUnsyncedChanges(true);
 
       const keys = getUserStorageKeys(activeUserId);
+      safeStorageSet(keys.unsynced, 'true');
       safeStorageSet(keys.banks, JSON.stringify(nextBanks));
       safeStorageSet(keys.categories, JSON.stringify(nextCategories));
       safeStorageSet(keys.transactions, JSON.stringify(nextTransactions));
@@ -612,12 +636,16 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       lastRefreshTimeRef.current = Date.now();
+      hasUnsyncedRef.current = false;
+      safeStorageRemove(keys.unsynced);
       setSyncStatus('connected');
       setSyncErrorMessage(null);
       setHasUnsyncedChanges(false);
       return { success: true };
     } catch (err: any) {
       const msg = getFriendlyErrorMessage(err);
+      hasUnsyncedRef.current = true;
+      safeStorageSet(getUserStorageKeys(activeUserId).unsynced, 'true');
       setHasUnsyncedChanges(true);
       setSyncStatus('error');
       setSyncErrorMessage(msg);
@@ -703,6 +731,10 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   const notifyMutationResult = (results: (any | undefined)[]) => {
     const failed = results.find(r => r?.error);
     if (failed?.error) {
+      hasUnsyncedRef.current = true;
+      if (userId) {
+        safeStorageSet(getUserStorageKeys(userId).unsynced, 'true');
+      }
       setHasUnsyncedChanges(true);
       setSyncStatus('error');
       const err = failed.error;
@@ -710,17 +742,36 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       setSyncErrorMessage(msg);
       showError(`Salvo localmente! Falha na nuvem: ${msg}`);
     } else {
+      hasUnsyncedRef.current = false;
+      if (userId) {
+        safeStorageRemove(getUserStorageKeys(userId).unsynced);
+      }
       setSyncStatus('connected');
       setSyncErrorMessage(null);
       setHasUnsyncedChanges(false);
     }
   };
 
+  const ensureSessionForWrite = async (): Promise<string | null> => {
+    const { session, error } = await getVerifiedSession(false);
+    if (!session?.access_token || !session.user?.id) {
+      notifyMutationResult([
+        {
+          error:
+            error ||
+            new Error('JWT_SESSION_MISSING: Sessão expirada. Saia da conta e entre novamente.'),
+        },
+      ]);
+      return null;
+    }
+    return session.user.id;
+  };
+
   const repairConnection = async () => {
     setIsRefreshing(true);
     try {
-      await refreshFromDatabase(true);
-      if (syncStatus !== 'error') {
+      const ok = await refreshFromDatabase(true);
+      if (ok) {
         showSuccess('Conexão restabelecida e dados sincronizados!');
       }
     } catch (err: any) {
@@ -734,6 +785,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     const { session, error: sessionErr } = await getVerifiedSession(true);
     if (!session?.access_token || !session.user?.id) {
       const msg = sessionErr?.message || 'Sessão expirada. Saia da conta e entre novamente para enviar os dados.';
+      setSyncStatus('error');
       setSyncErrorMessage(msg);
       showError(msg);
       return;
@@ -742,12 +794,12 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     const activeUserId = session.user.id;
     setIsRefreshing(true);
     try {
-      if (banks.length > 0) {
-        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' }));
-        if (res?.error) throw res.error;
-      }
       if (categories.length > 0) {
         const res = await safeDbRun(supabase.from('categories').upsert(categories.map(c => mapCategoryToDb(c, activeUserId)), { onConflict: 'user_id,id' }));
+        if (res?.error) throw res.error;
+      }
+      if (banks.length > 0) {
+        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' }));
         if (res?.error) throw res.error;
       }
       if (transactions.length > 0) {
@@ -758,12 +810,15 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
           if (res?.error) throw res.error;
         }
       }
+      hasUnsyncedRef.current = false;
+      safeStorageRemove(getUserStorageKeys(activeUserId).unsynced);
       setHasUnsyncedChanges(false);
       setSyncStatus('connected');
       setSyncErrorMessage(null);
       showSuccess('Todas as alterações locais foram salvas na nuvem com sucesso!');
     } catch (err: any) {
       const msg = getFriendlyErrorMessage(err);
+      setSyncStatus('error');
       setSyncErrorMessage(msg);
       showError('Erro ao enviar dados locais: ' + msg);
     } finally {
@@ -776,7 +831,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     saveHistory();
     const bankWithUser = { ...newBank, userId };
     setBanks(prev => [...prev, bankWithUser]);
-    const res = await safeDbRun(supabase.from('banks').insert(mapBankToDb(bankWithUser, userId)));
+    const activeUserId = await ensureSessionForWrite();
+    if (!activeUserId) return;
+    const res = await safeDbRun(supabase.from('banks').insert(mapBankToDb(bankWithUser, activeUserId)));
     notifyMutationResult([res]);
   };
 
@@ -786,8 +843,10 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setBanks(prev => prev.filter(b => b.id !== id));
     setTransactions(prev => prev.filter(t => t.bankId !== id && t.destinationBankId !== id));
 
-    const r1 = await safeDbRun(supabase.from('banks').delete().eq('user_id', userId).eq('id', id));
-    const r2 = await safeDbRun(supabase.from('transactions').delete().eq('user_id', userId).or(`bank_id.eq.${id},destination_bank_id.eq.${id}`));
+    const activeUserId = await ensureSessionForWrite();
+    if (!activeUserId) return;
+    const r1 = await safeDbRun(supabase.from('banks').delete().eq('user_id', activeUserId).eq('id', id));
+    const r2 = await safeDbRun(supabase.from('transactions').delete().eq('user_id', activeUserId).or(`bank_id.eq.${id},destination_bank_id.eq.${id}`));
     notifyMutationResult([r1, r2]);
   };
 
@@ -796,7 +855,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     saveHistory();
     const bankWithUser = { ...updatedBank, userId };
     setBanks(prev => prev.map(b => b.id === updatedBank.id ? bankWithUser : b));
-    const res = await safeDbRun(supabase.from('banks').upsert(mapBankToDb(bankWithUser, userId), { onConflict: 'user_id,id' }));
+    const activeUserId = await ensureSessionForWrite();
+    if (!activeUserId) return;
+    const res = await safeDbRun(supabase.from('banks').upsert(mapBankToDb(bankWithUser, activeUserId), { onConflict: 'user_id,id' }));
     notifyMutationResult([res]);
   };
 
@@ -844,8 +905,10 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(prev => [...newTransactions, ...prev]);
 
     (async () => {
-      const r1 = await safeDbRun(supabase.from('transactions').upsert(newTransactions.map(tx => mapTransactionToDb(tx, userId)), { onConflict: 'user_id,id' }));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
+      const activeUserId = await ensureSessionForWrite();
+      if (!activeUserId) return;
+      const r1 = await safeDbRun(supabase.from('transactions').upsert(newTransactions.map(tx => mapTransactionToDb(tx, activeUserId)), { onConflict: 'user_id,id' }));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' }));
       notifyMutationResult([r1, r2]);
     })();
 
@@ -884,8 +947,10 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(prev => prev.filter((t) => !idsToDelete.includes(t.id)));
 
     (async () => {
-      const r1 = await safeDbRun(supabase.from('transactions').delete().eq('user_id', userId).in('id', idsToDelete));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
+      const activeUserId = await ensureSessionForWrite();
+      if (!activeUserId) return;
+      const r1 = await safeDbRun(supabase.from('transactions').delete().eq('user_id', activeUserId).in('id', idsToDelete));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' }));
       notifyMutationResult([r1, r2]);
     })();
   };
@@ -944,8 +1009,10 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     }
 
     (async () => {
-      const r1 = await safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(tx => mapTransactionToDb(tx, userId)), { onConflict: 'user_id,id' }));
-      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, userId)), { onConflict: 'user_id,id' }));
+      const activeUserId = await ensureSessionForWrite();
+      if (!activeUserId) return;
+      const r1 = await safeDbRun(supabase.from('transactions').upsert(toUpsertTransactions.map(tx => mapTransactionToDb(tx, activeUserId)), { onConflict: 'user_id,id' }));
+      const r2 = await safeDbRun(supabase.from('banks').upsert(updatedBanks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' }));
       notifyMutationResult([r1, r2]);
     })();
   };
@@ -955,7 +1022,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     saveHistory();
     const catWithUser = { ...cat, userId };
     setCategories(prev => [...prev, catWithUser]);
-    const res = await safeDbRun(supabase.from('categories').insert(mapCategoryToDb(catWithUser, userId)));
+    const activeUserId = await ensureSessionForWrite();
+    if (!activeUserId) return;
+    const res = await safeDbRun(supabase.from('categories').insert(mapCategoryToDb(catWithUser, activeUserId)));
     notifyMutationResult([res]);
     showSuccess("Categoria adicionada!");
   };
@@ -965,7 +1034,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     saveHistory();
     const catWithUser = { ...cat, userId };
     setCategories(prev => prev.map(c => c.id === cat.id ? catWithUser : c));
-    const res = await safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(catWithUser, userId), { onConflict: 'user_id,id' }));
+    const activeUserId = await ensureSessionForWrite();
+    if (!activeUserId) return;
+    const res = await safeDbRun(supabase.from('categories').upsert(mapCategoryToDb(catWithUser, activeUserId), { onConflict: 'user_id,id' }));
     notifyMutationResult([res]);
     showSuccess("Categoria atualizada!");
   };
@@ -978,7 +1049,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     }
     saveHistory();
     setCategories(prev => prev.filter(c => c.id !== id));
-    const res = await safeDbRun(supabase.from('categories').delete().eq('user_id', userId).eq('id', id));
+    const activeUserId = await ensureSessionForWrite();
+    if (!activeUserId) return;
+    const res = await safeDbRun(supabase.from('categories').delete().eq('user_id', activeUserId).eq('id', id));
     notifyMutationResult([res]);
     showSuccess("Categoria removida!");
   };
@@ -997,7 +1070,9 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
 
     const reorderedItems = updated.filter(t => transactionIds.includes(t.id));
     (async () => {
-      const res = await safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(tx => mapTransactionToDb(tx, userId)), { onConflict: 'user_id,id' }));
+      const activeUserId = await ensureSessionForWrite();
+      if (!activeUserId) return;
+      const res = await safeDbRun(supabase.from('transactions').upsert(reorderedItems.map(tx => mapTransactionToDb(tx, activeUserId)), { onConflict: 'user_id,id' }));
       notifyMutationResult([res]);
     })();
   };

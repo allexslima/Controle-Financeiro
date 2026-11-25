@@ -47,9 +47,14 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
     }
 
     try {
-      await refreshFromDatabase(true);
-      showSuccess("Dados sincronizados com a nuvem!");
+      const ok = await refreshFromDatabase(true);
+      if (ok) {
+        showSuccess("Dados sincronizados com a nuvem!");
+      } else {
+        setDialogOpen(true);
+      }
     } catch {
+      setDialogOpen(true);
       showError("Não foi possível sincronizar no momento.");
     }
   };
@@ -92,7 +97,9 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
           message: `OK em ${elapsed}ms | Conta: ${session.user.email} (${uid.slice(0, 8)}) | Nuvem: ${banksRes.count ?? 0} contas, ${catsRes.count ?? 0} categorias, ${txRes.count ?? 0} transações.`,
           ms: elapsed,
         });
-        await refreshFromDatabase(true);
+        if (!hasUnsyncedChanges) {
+          await refreshFromDatabase(true);
+        }
       }
     } catch (err: any) {
       const elapsed = Math.round(performance.now() - start);
@@ -109,8 +116,9 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
   const handleRepair = async () => {
     setIsRepairing(true);
     try {
-      await repairConnection();
-      if (syncStatus === 'connected') {
+      const ok = await refreshFromDatabase(true);
+      if (ok) {
+        showSuccess('Conexão restabelecida e dados sincronizados!');
         setDialogOpen(false);
       }
     } finally {

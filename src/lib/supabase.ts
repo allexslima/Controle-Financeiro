@@ -67,23 +67,31 @@ const supabaseFetch: typeof fetch = async (input, init) => {
         ? input.toString()
         : input.url;
 
-  const headers = new Headers(input instanceof Request ? input.headers : undefined);
+  const mergedHeaders = new Headers(input instanceof Request ? input.headers : undefined);
   if (init?.headers) {
     new Headers(init.headers).forEach((value, key) => {
-      headers.set(key, value);
+      mergedHeaders.set(key, value);
     });
   }
 
-  let targetUrl = rawUrl;
-  if (typeof window !== 'undefined' && rawUrl.startsWith(normalizedSupabaseUrl)) {
+  const plainHeaders: Record<string, string> = {};
+  mergedHeaders.forEach((value, key) => {
+    plainHeaders[key] = value;
+  });
+
+  const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+  const isSupabaseTarget = rawUrl.startsWith(normalizedSupabaseUrl);
+
+  let proxyUrl: string | null = null;
+  if (typeof window !== 'undefined' && isSupabaseTarget) {
     const suffix = rawUrl.slice(normalizedSupabaseUrl.length);
     const normalizedSuffix = suffix.startsWith('/') ? suffix : `/${suffix}`;
-    targetUrl = `${window.location.origin}/api/supabase${normalizedSuffix}`;
+    proxyUrl = `${window.location.origin}/api/supabase${normalizedSuffix}`;
   }
 
   // Bloquear qualquer chamada REST sem JWT de usuário autenticado (evita fallback para anon retornando [] ou 42501)
-  if (targetUrl.includes('/rest/v1/')) {
-    const authHeader = headers.get('authorization') || '';
+  if (rawUrl.includes('/rest/v1/')) {
+    const authHeader = mergedHeaders.get('authorization') || '';
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
     const token = match ? match[1].trim() : '';
     if (!isThreePartJwt(token)) {
@@ -93,12 +101,51 @@ const supabaseFetch: typeof fetch = async (input, init) => {
     }
   }
 
-  if (input instanceof Request) {
-    const nextRequest = new Request(targetUrl, input);
-    return fetch(nextRequest, { ...init, headers });
+  const buildInit = (): RequestInit => {
+    const reqInit: RequestInit = {
+      method,
+      headers: plainHeaders,
+      cache: 'no-store',
+    };
+    if (init?.signal) {
+      reqInit.signal = init.signal;
+    }
+    if (method !== 'GET' && method !== 'HEAD' && init?.body !== undefined) {
+      reqInit.body = init.body;
+    }
+    return reqInit;
+  };
+
+  if (proxyUrl) {
+    let proxyErrMsg = '';
+    try {
+      const proxyRes = await fetch(proxyUrl, { ...buildInit(), credentials: 'same-origin' });
+      // Se o proxy não existir ou estiver fora do ar (404/502/503/504), tenta direto no Supabase
+      if (![404, 502, 503, 504].includes(proxyRes.status)) {
+        return proxyRes;
+      }
+      proxyErrMsg = `HTTP ${proxyRes.status}`;
+    } catch (proxyErr: any) {
+      proxyErrMsg = proxyErr?.message || String(proxyErr);
+    }
+
+    try {
+      return await fetch(rawUrl, buildInit());
+    } catch (directErr: any) {
+      const directErrMsg = directErr?.message || String(directErr);
+      let shortPath = rawUrl;
+      try {
+        shortPath = new URL(rawUrl).pathname;
+      } catch {
+        // ignore
+      }
+      throw new Error(
+        `Failed to fetch (${shortPath} | proxy: ${proxyErrMsg} | direto: ${directErrMsg})`
+      );
+    }
   }
 
-  return fetch(targetUrl, { ...init, headers });
+  return fetch(rawUrl, buildInit());
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -189,7 +236,7 @@ export const getFriendlyErrorMessage = (error: any): string => {
     return 'Requisição bloqueada por extensão de segurança ou bloqueador de anúncios do navegador.';
   }
   if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) {
-    return 'Falha de comunicação com a nuvem. Verifique sua conexão com a internet ou se a rede permite acesso ao Supabase.';
+    return `Falha de comunicação com a nuvem (${msg}). Verifique sua conexão ou clique em "Testar Conexão em Tempo Real".`;
   }
   return `${code}${msg}`;
 };

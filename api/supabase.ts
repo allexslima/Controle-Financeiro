@@ -1,5 +1,14 @@
-const SUPABASE_BASE_URL =
-  process.env.VITE_SUPABASE_URL?.trim() || 'https://vzzpvrlahbvbyccpwven.supabase.co';
+function resolveSupabaseBaseUrl(raw?: string): string {
+  const fallback = 'https://vzzpvrlahbvbyccpwven.supabase.co';
+  if (!raw) return fallback;
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/\/+$/, '');
+  if (trimmed.includes('.')) return `https://${trimmed}`.replace(/\/+$/, '');
+  return `https://${trimmed}.supabase.co`;
+}
+
+const SUPABASE_BASE_URL = resolveSupabaseBaseUrl(process.env.VITE_SUPABASE_URL);
 
 export const config = {
   api: {
@@ -26,17 +35,22 @@ export default async function handler(req: any, res: any) {
     res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'apikey,authorization,content-type,prefer,range,x-client-info,accept-profile,content-profile'
+      'apikey,authorization,content-type,prefer,range,x-client-info,accept-profile,content-profile,x-supabase-api-version'
     );
     return res.status(204).end();
   }
 
   try {
-    const rawPath = Array.isArray(req.query?.__path)
+    let rawPath = Array.isArray(req.query?.__path)
       ? req.query.__path.join('/')
       : String(req.query?.__path || '');
 
-    const targetUrl = new URL(`${SUPABASE_BASE_URL.replace(/\/+$/, '')}/${rawPath.replace(/^\/+/, '')}`);
+    if (!rawPath && typeof req.url === 'string') {
+      const stripped = req.url.split('?')[0].replace(/^\/api\/supabase\/?/, '');
+      rawPath = stripped;
+    }
+
+    const targetUrl = new URL(`${SUPABASE_BASE_URL}/${rawPath.replace(/^\/+/, '')}`);
 
     if (req.query) {
       for (const [key, val] of Object.entries(req.query)) {
@@ -57,7 +71,9 @@ export default async function handler(req: any, res: any) {
       'accept',
       'prefer',
       'range',
+      'range-unit',
       'x-client-info',
+      'x-retry-count',
       'accept-profile',
       'content-profile',
       'x-supabase-api-version',
@@ -83,7 +99,6 @@ export default async function handler(req: any, res: any) {
       'content-range',
       'preference-applied',
       'x-total-count',
-      'cache-control',
     ];
     for (const headerName of passthroughHeaders) {
       const val = upstream.headers.get(headerName);
@@ -92,9 +107,10 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.status(upstream.status);
 
-    if (req.method === 'HEAD') {
+    if (req.method === 'HEAD' || upstream.status === 204 || upstream.status === 304) {
       return res.end();
     }
 

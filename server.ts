@@ -48,7 +48,9 @@ async function startServer() {
         'accept',
         'prefer',
         'range',
+        'range-unit',
         'x-client-info',
+        'x-retry-count',
         'accept-profile',
         'content-profile',
         'x-supabase-api-version',
@@ -73,7 +75,6 @@ async function startServer() {
         'content-range',
         'preference-applied',
         'x-total-count',
-        'cache-control',
       ];
       for (const headerName of passthroughHeaders) {
         const val = upstream.headers.get(headerName);
@@ -82,8 +83,9 @@ async function startServer() {
         }
       }
 
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.status(upstream.status);
-      if (req.method === 'HEAD') {
+      if (req.method === 'HEAD' || upstream.status === 204 || upstream.status === 304) {
         return res.end();
       }
 
