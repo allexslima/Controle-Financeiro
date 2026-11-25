@@ -5,7 +5,7 @@ import { RefreshCw, AlertCircle, Wrench, UploadCloud, CheckCircle2, Activity, Wi
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useFinance } from "@/context/FinanceContext";
-import { supabase, getVerifiedSession } from "@/lib/supabase";
+import { supabase, getVerifiedSession, decodeJwtClaims, getLastRestDebug } from "@/lib/supabase";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { showSuccess, showError } from "@/utils/toast";
 import {
@@ -23,12 +23,14 @@ interface SyncButtonProps {
 
 const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
   const { 
+    banks,
+    categories,
+    transactions,
     syncStatus, 
     syncErrorMessage, 
     isRefreshing, 
     hasUnsyncedChanges, 
     refreshFromDatabase, 
-    repairConnection, 
     pushLocalToDatabase 
   } = useFinance();
 
@@ -41,7 +43,7 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
   const handleClick = async () => {
     if (isRefreshing) return;
 
-    if (syncStatus === 'error' || syncStatus === 'needs_tables') {
+    if (syncStatus === 'error' || syncStatus === 'needs_tables' || hasUnsyncedChanges) {
       setDialogOpen(true);
       return;
     }
@@ -76,6 +78,7 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
       }
 
       const uid = session.user.id;
+      const claims = decodeJwtClaims(session.access_token);
       const [banksRes, catsRes, txRes] = await Promise.all([
         supabase.from('banks').select('id', { count: 'exact', head: true }).eq('user_id', uid),
         supabase.from('categories').select('id', { count: 'exact', head: true }).eq('user_id', uid),
@@ -84,17 +87,19 @@ const SyncButton = ({ className, showText = false }: SyncButtonProps) => {
 
       const elapsed = Math.round(performance.now() - start);
       const err = banksRes.error || catsRes.error || txRes.error;
+      const dbg = getLastRestDebug();
+      const routeInfo = dbg ? `via ${dbg.route}` : 'via api';
 
       if (err) {
         setTestResult({
           success: false,
-          message: `Conta ${session.user.email} (${uid.slice(0, 8)}) — Erro [${err.code || 'API'}]: ${err.message}`,
+          message: `Conta ${session.user.email} (${uid.slice(0, 8)} | role=${claims?.role || 'none'} | ${routeInfo}) — Erro [${err.code || 'API'}]: ${err.message}`,
           ms: elapsed,
         });
       } else {
         setTestResult({
           success: true,
-          message: `OK em ${elapsed}ms | Conta: ${session.user.email} (${uid.slice(0, 8)}) | Nuvem: ${banksRes.count ?? 0} contas, ${catsRes.count ?? 0} categorias, ${txRes.count ?? 0} transações.`,
+          message: `OK em ${elapsed}ms (${routeInfo}) | Conta: ${session.user.email} (${uid.slice(0, 8)} | role=${claims?.role || 'none'}) | Nuvem: ${banksRes.count ?? 0} contas, ${catsRes.count ?? 0} categorias, ${txRes.count ?? 0} transações | Tela: ${banks.length} contas, ${categories.length} categorias, ${transactions.length} transações.`,
           ms: elapsed,
         });
         if (!hasUnsyncedChanges) {

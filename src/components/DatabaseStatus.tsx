@@ -60,31 +60,43 @@ CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 
 -- Habilitar RLS estrito: cada usuário autenticado acessa somente seus próprios registros
-ALTER TABLE banks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.banks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Acesso total a banks" ON banks;
-DROP POLICY IF EXISTS "Acesso total a categories" ON categories;
-DROP POLICY IF EXISTS "Acesso total a transactions" ON transactions;
-DROP POLICY IF EXISTS "banks_user_isolation" ON banks;
-DROP POLICY IF EXISTS "categories_user_isolation" ON categories;
-DROP POLICY IF EXISTS "transactions_user_isolation" ON transactions;
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT ALL ON TABLE public.banks, public.categories, public.transactions TO authenticated;
 
-CREATE POLICY "banks_user_isolation" ON banks
-  FOR ALL TO authenticated
+DO $$
+DECLARE pol RECORD;
+BEGIN
+  FOR pol IN
+    SELECT tablename, policyname
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN ('banks', 'categories', 'transactions')
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', pol.policyname, pol.tablename);
+  END LOOP;
+END $$;
+
+CREATE POLICY "banks_user_isolation" ON public.banks
+  AS PERMISSIVE FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "categories_user_isolation" ON categories
-  FOR ALL TO authenticated
+CREATE POLICY "categories_user_isolation" ON public.categories
+  AS PERMISSIVE FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "transactions_user_isolation" ON transactions
-  FOR ALL TO authenticated
+CREATE POLICY "transactions_user_isolation" ON public.transactions
+  AS PERMISSIVE FOR ALL TO authenticated
   USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);`;
+  WITH CHECK (auth.uid() = user_id);
+
+NOTIFY pgrst, 'reload schema';
+NOTIFY pgrst, 'reload config';`;
 
 export const DatabaseStatus = () => {
   const { syncStatus, refreshFromDatabase } = useFinance();

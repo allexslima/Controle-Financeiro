@@ -396,13 +396,13 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     if (!userId) return;
 
-    // Sincronização inicial para o usuário autenticado
-    refreshFromDatabase(true);
+    // Sincronização inicial para o usuário autenticado (não sobrescrever alterações locais pendentes)
+    refreshFromDatabase(false);
 
     // 1. Ouvir retorno ao aplicativo (quando o usuário volta ao computador ou troca de aba)
     const handleFocusOrVisible = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        refreshFromDatabase(true);
+        refreshFromDatabase(false);
       }
     };
     window.addEventListener('focus', handleFocusOrVisible);
@@ -422,7 +422,7 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         if (!isImportingRef.current) {
-          refreshFromDatabase(true);
+          refreshFromDatabase(false);
         }
       }, 1000);
     };
@@ -792,21 +792,47 @@ export const FinanceProvider = ({ children }: { children: React.ReactNode }) => 
     }
 
     const activeUserId = session.user.id;
+    const dedupeById = <T extends { id?: string }>(items: T[], prefix: string): T[] => {
+      const map = new Map<string, T>();
+      items.forEach((item, idx) => {
+        const safeId = item?.id ? String(item.id).trim() : `${prefix}-${Date.now()}-${idx}`;
+        if (!safeId) return;
+        map.set(safeId, { ...item, id: safeId });
+      });
+      return Array.from(map.values());
+    };
+
+    const uniqueCategories = dedupeById(categories, 'cat');
+    const uniqueBanks = dedupeById(banks, 'bank');
+    const uniqueTransactions = dedupeById(transactions, 'tx').filter((t) => Boolean(t.bankId));
+
     setIsRefreshing(true);
     try {
-      if (categories.length > 0) {
-        const res = await safeDbRun(supabase.from('categories').upsert(categories.map(c => mapCategoryToDb(c, activeUserId)), { onConflict: 'user_id,id' }));
+      if (uniqueCategories.length > 0) {
+        const res = await safeDbRun(
+          supabase
+            .from('categories')
+            .upsert(uniqueCategories.map(c => mapCategoryToDb(c, activeUserId)), { onConflict: 'user_id,id' })
+        );
         if (res?.error) throw res.error;
       }
-      if (banks.length > 0) {
-        const res = await safeDbRun(supabase.from('banks').upsert(banks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' }));
+      if (uniqueBanks.length > 0) {
+        const res = await safeDbRun(
+          supabase
+            .from('banks')
+            .upsert(uniqueBanks.map(b => mapBankToDb(b, activeUserId)), { onConflict: 'user_id,id' })
+        );
         if (res?.error) throw res.error;
       }
-      if (transactions.length > 0) {
+      if (uniqueTransactions.length > 0) {
         const BATCH_SIZE = 100;
-        for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
-          const slice = transactions.slice(i, i + BATCH_SIZE);
-          const res = await safeDbRun(supabase.from('transactions').upsert(slice.map(t => mapTransactionToDb(t, activeUserId)), { onConflict: 'user_id,id' }));
+        for (let i = 0; i < uniqueTransactions.length; i += BATCH_SIZE) {
+          const slice = uniqueTransactions.slice(i, i + BATCH_SIZE);
+          const res = await safeDbRun(
+            supabase
+              .from('transactions')
+              .upsert(slice.map(t => mapTransactionToDb(t, activeUserId)), { onConflict: 'user_id,id' })
+          );
           if (res?.error) throw res.error;
         }
       }

@@ -53,10 +53,55 @@ const supabaseUrl = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
 const supabaseAnonKey = resolveSupabaseKey(import.meta.env.VITE_SUPABASE_ANON_KEY);
 const normalizedSupabaseUrl = supabaseUrl.replace(/\/+$/, '');
 
-function isThreePartJwt(token: string): boolean {
-  if (!token || token === supabaseAnonKey) return false;
+export interface JwtDebugClaims {
+  sub?: string;
+  role?: string;
+  aud?: string;
+  exp?: number;
+}
+
+export interface RestDebugInfo {
+  path: string;
+  method: string;
+  route: 'proxy' | 'direct';
+  status: number;
+  jwtRole: string;
+  jwtSub: string;
+}
+
+let lastRestDebug: RestDebugInfo | null = null;
+
+export function getLastRestDebug(): RestDebugInfo | null {
+  return lastRestDebug;
+}
+
+export function decodeJwtClaims(token: string): JwtDebugClaims | null {
+  if (!token || token === supabaseAnonKey) return null;
   const parts = token.split('.');
-  return parts.length === 3 && parts.every((part) => part.length > 0);
+  if (parts.length !== 3 || !parts.every((part) => part.length > 0)) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    const json = typeof atob === 'function' ? atob(padded) : '';
+    if (!json) return null;
+    const parsed = JSON.parse(json);
+    return {
+      sub: typeof parsed.sub === 'string' ? parsed.sub : undefined,
+      role: typeof parsed.role === 'string' ? parsed.role : undefined,
+      aud: typeof parsed.aud === 'string' ? parsed.aud : undefined,
+      exp: typeof parsed.exp === 'number' ? parsed.exp : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isAuthenticatedUserJwt(token: string): { valid: boolean; claims: JwtDebugClaims | null } {
+  const claims = decodeJwtClaims(token);
+  if (!claims) return { valid: false, claims: null };
+  const isAuthRole = claims.role === 'authenticated';
+  const hasSub = Boolean(claims.sub && claims.sub.length > 0);
+  return { valid: isAuthRole && hasSub, claims };
 }
 
 const supabaseFetch: typeof fetch = async (input, init) => {
@@ -89,17 +134,40 @@ const supabaseFetch: typeof fetch = async (input, init) => {
     proxyUrl = `${window.location.origin}/api/supabase${normalizedSuffix}`;
   }
 
+  let restClaims: JwtDebugClaims | null = null;
+  const isRestCall = rawUrl.includes('/rest/v1/');
+
   // Bloquear qualquer chamada REST sem JWT de usuário autenticado (evita fallback para anon retornando [] ou 42501)
-  if (rawUrl.includes('/rest/v1/')) {
+  if (isRestCall) {
     const authHeader = mergedHeaders.get('authorization') || '';
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
     const token = match ? match[1].trim() : '';
-    if (!isThreePartJwt(token)) {
+    const { valid, claims } = isAuthenticatedUserJwt(token);
+    restClaims = claims;
+    if (!valid) {
       throw new Error(
-        'JWT_SESSION_MISSING: Sessão de usuário não autenticada ou expirada. Saia da conta e entre novamente.'
+        `JWT_SESSION_MISSING: Sessão de usuário não autenticada (role=${claims?.role || 'none'}). Saia da conta e entre novamente.`
       );
     }
   }
+
+  const recordRestDebug = (route: 'proxy' | 'direct', status: number) => {
+    if (!isRestCall) return;
+    let shortPath = rawUrl;
+    try {
+      shortPath = new URL(rawUrl).pathname;
+    } catch {
+      // ignore
+    }
+    lastRestDebug = {
+      path: shortPath,
+      method,
+      route,
+      status,
+      jwtRole: restClaims?.role || 'none',
+      jwtSub: restClaims?.sub ? restClaims.sub.slice(0, 8) : 'none',
+    };
+  };
 
   const buildInit = (): RequestInit => {
     const reqInit: RequestInit = {
@@ -122,6 +190,7 @@ const supabaseFetch: typeof fetch = async (input, init) => {
       const proxyRes = await fetch(proxyUrl, { ...buildInit(), credentials: 'same-origin' });
       // Se o proxy não existir ou estiver fora do ar (404/502/503/504), tenta direto no Supabase
       if (![404, 502, 503, 504].includes(proxyRes.status)) {
+        recordRestDebug('proxy', proxyRes.status);
         return proxyRes;
       }
       proxyErrMsg = `HTTP ${proxyRes.status}`;
@@ -130,7 +199,9 @@ const supabaseFetch: typeof fetch = async (input, init) => {
     }
 
     try {
-      return await fetch(rawUrl, buildInit());
+      const directRes = await fetch(rawUrl, buildInit());
+      recordRestDebug('direct', directRes.status);
+      return directRes;
     } catch (directErr: any) {
       const directErrMsg = directErr?.message || String(directErr);
       let shortPath = rawUrl;
@@ -145,7 +216,9 @@ const supabaseFetch: typeof fetch = async (input, init) => {
     }
   }
 
-  return fetch(rawUrl, buildInit());
+  const res = await fetch(rawUrl, buildInit());
+  recordRestDebug('direct', res.status);
+  return res;
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -237,6 +310,12 @@ export const getFriendlyErrorMessage = (error: any): string => {
   }
   if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) {
     return `Falha de comunicação com a nuvem (${msg}). Verifique sua conexão ou clique em "Testar Conexão em Tempo Real".`;
+  }
+  if (String(error.code || '') === '42501' || lower.includes('row-level security')) {
+    const dbg = lastRestDebug
+      ? ` [role=${lastRestDebug.jwtRole}, sub=${lastRestDebug.jwtSub}, via=${lastRestDebug.route}, http=${lastRestDebug.status}]`
+      : '';
+    return `${code}${msg}${dbg}`;
   }
   return `${code}${msg}`;
 };
