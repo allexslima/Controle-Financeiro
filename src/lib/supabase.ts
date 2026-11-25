@@ -188,8 +188,8 @@ const supabaseFetch: typeof fetch = async (input, init) => {
     let proxyErrMsg = '';
     try {
       const proxyRes = await fetch(proxyUrl, { ...buildInit(), credentials: 'same-origin' });
-      // Se o proxy não existir ou estiver fora do ar (404/502/503/504), tenta direto no Supabase
-      if (![404, 502, 503, 504].includes(proxyRes.status)) {
+      // Se o proxy não existir, estiver fora do ar ou rejeitar header gigante (431), tenta direto no Supabase
+      if (![404, 431, 502, 503, 504].includes(proxyRes.status)) {
         recordRestDebug('proxy', proxyRes.status);
         return proxyRes;
       }
@@ -248,7 +248,8 @@ export const getVerifiedSession = async (validateWithServer = false) => {
     activeSession = refreshed.session;
   } else {
     const expiresAtMs = activeSession.expires_at ? activeSession.expires_at * 1000 : null;
-    if (expiresAtMs && expiresAtMs <= Date.now() + 30000) {
+    const isOversizedToken = activeSession.access_token.length > 6000;
+    if (isOversizedToken || (expiresAtMs && expiresAtMs <= Date.now() + 30000)) {
       const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
       if (!refreshErr && refreshed.session?.access_token) {
         activeSession = refreshed.session;
@@ -307,6 +308,9 @@ export const getFriendlyErrorMessage = (error: any): string => {
   }
   if (isNetworkOrAdblockError(error)) {
     return 'Requisição bloqueada por extensão de segurança ou bloqueador de anúncios do navegador.';
+  }
+  if (lower.includes('request_header_too_large') || lower.includes('431')) {
+    return 'Token de sessão muito grande (causado por foto de perfil antiga salva no metadado). Remova/redefina o metadado da conta e renove a sessão.';
   }
   if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) {
     return `Falha de comunicação com a nuvem (${msg}). Verifique sua conexão ou clique em "Testar Conexão em Tempo Real".`;

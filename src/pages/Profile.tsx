@@ -87,15 +87,33 @@ const ProfilePage = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      showError('A imagem deve ter no máximo 2MB.');
+    if (file.size > 5 * 1024 * 1024) {
+      showError('A imagem deve ter no máximo 5MB.');
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = async () => {
-      const base64Url = reader.result as string;
-      await updateProfileDetails({ avatarUrl: base64Url });
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = async () => {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          showError('Não foi possível processar a imagem.');
+          return;
+        }
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        await updateProfileDetails({ avatarUrl: compressedBase64 });
+      };
+      img.onerror = () => showError('Arquivo de imagem inválido.');
+      img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
   };

@@ -27,20 +27,63 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isOversizedAvatar = (url?: unknown): boolean => {
+    if (typeof url !== 'string') return false;
+    return url.startsWith('data:') || url.length > 500;
+  };
+
   const buildProfile = (currentUser: User): UserProfile => {
     const meta = currentUser.user_metadata || {};
     // Fallback local se imagem for salva em localStorage
     const localAvatar = localStorage.getItem(`avatar_${currentUser.id}`);
     const localBio = localStorage.getItem(`bio_${currentUser.id}`);
+    const safeMetaAvatar =
+      typeof meta.avatar_url === 'string' && !isOversizedAvatar(meta.avatar_url)
+        ? meta.avatar_url
+        : undefined;
 
     return {
       id: currentUser.id,
       email: currentUser.email || '',
       name: meta.name || currentUser.email?.split('@')[0] || 'Usuário',
-      avatarUrl: meta.avatar_url || localAvatar || undefined,
+      avatarUrl: localAvatar || safeMetaAvatar || (typeof meta.avatar_url === 'string' ? meta.avatar_url : undefined),
       bio: meta.bio || localBio || 'Focado no controle e crescimento do meu patrimônio 🚀',
       createdAt: currentUser.created_at,
     };
+  };
+
+  // Limpar avatar base64 gigante do user_metadata (evita JWT > 16KB / erro 431 REQUEST_HEADER_TOO_LARGE)
+  const healOversizedJwtMetadata = async (activeSession: Session | null) => {
+    if (!activeSession?.user) return;
+    const rawAvatar = activeSession.user.user_metadata?.avatar_url;
+    const isTokenHuge = (activeSession.access_token?.length || 0) > 6000;
+    if (!isOversizedAvatar(rawAvatar) && !isTokenHuge) return;
+
+    try {
+      if (typeof rawAvatar === 'string' && rawAvatar.startsWith('data:')) {
+        localStorage.setItem(`avatar_${activeSession.user.id}`, rawAvatar);
+      }
+      // Tentar renovar sessão primeiro caso o banco já tenha sido limpo via SQL
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      if (refreshed?.session && (refreshed.session.access_token?.length || 0) <= 6000) {
+        setSession(refreshed.session);
+        setUser(refreshed.session.user);
+        setProfile(buildProfile(refreshed.session.user));
+        return;
+      }
+      // Se ainda estiver grande no servidor Auth, tentar remover avatar_url do metadata
+      if (isOversizedAvatar(rawAvatar)) {
+        await supabase.auth.updateUser({ data: { avatar_url: null } });
+        const { data: afterClean } = await supabase.auth.refreshSession();
+        if (afterClean?.session) {
+          setSession(afterClean.session);
+          setUser(afterClean.session.user);
+          setProfile(buildProfile(afterClean.session.user));
+        }
+      }
+    } catch (err) {
+      console.warn('Não foi possível limpar avatar_url gigante automaticamente:', err);
+    }
   };
 
   // Carregar sessão atual
@@ -52,6 +95,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           setProfile(buildProfile(session.user));
+          healOversizedJwtMetadata(session);
         }
       } catch (err) {
         console.error('Erro ao inicializar autenticação:', err);
@@ -90,6 +134,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) {
         showError(error.message || 'Erro ao entrar. Verifique seus dados.');
         return { error };
+      }
+
+      if (data.session) {
+        healOversizedJwtMetadata(data.session);
       }
 
       showSuccess(`Bem-vindo de volta!`);
@@ -152,28 +200,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const updates: any = {};
       if (data.name !== undefined) updates.name = data.name.trim();
       if (data.avatarUrl !== undefined) {
-        updates.avatar_url = data.avatarUrl;
-        if (user) localStorage.setItem(`avatar_${user.id}`, data.avatarUrl);
+        if (user) {
+          if (data.avatarUrl) {
+            localStorage.setItem(`avatar_${user.id}`, data.avatarUrl);
+          } else {
+            localStorage.removeItem(`avatar_${user.id}`);
+          }
+        }
+        // Nunca gravar imagem base64 no user_metadata do Supabase (incha o JWT e gera erro 431/RLS)
+        if (!data.avatarUrl) {
+          updates.avatar_url = null;
+        } else if (!isOversizedAvatar(data.avatarUrl)) {
+          updates.avatar_url = data.avatarUrl;
+        } else if (isOversizedAvatar(user?.user_metadata?.avatar_url)) {
+          updates.avatar_url = null;
+        }
       }
       if (data.bio !== undefined) {
         updates.bio = data.bio.trim();
         if (user) localStorage.setItem(`bio_${user.id}`, data.bio.trim());
       }
 
-      const { error } = await supabase.auth.updateUser({
-        data: updates
-      });
+      if (Object.keys(updates).length > 0) {
+        const { error } = await supabase.auth.updateUser({
+          data: updates
+        });
 
-      if (error) {
-        showError(error.message || 'Erro ao atualizar dados do perfil.');
-        return { error };
+        if (error) {
+          showError(error.message || 'Erro ao atualizar dados do perfil.');
+          return { error };
+        }
       }
 
       if (profile) {
         setProfile({
           ...profile,
           ...(data.name !== undefined ? { name: data.name.trim() } : {}),
-          ...(data.avatarUrl !== undefined ? { avatarUrl: data.avatarUrl } : {}),
+          ...(data.avatarUrl !== undefined ? { avatarUrl: data.avatarUrl || undefined } : {}),
           ...(data.bio !== undefined ? { bio: data.bio.trim() } : {}),
         });
       }
